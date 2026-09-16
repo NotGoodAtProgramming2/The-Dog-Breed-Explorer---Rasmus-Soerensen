@@ -1,0 +1,66 @@
+name: Dog Breed Pipeline
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 2 * * *" # 02:00 UTC daily
+  workflow_dispatch: {} # lets us trigger a run manually from the Actions tab
+
+# On a pull request, GITHUB_TOKEN is read-only regardless of this setting.
+# "contents: write" only takes effect on push/schedule/manual runs, which is
+# where we actually need to commit the refreshed data back.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Runs on every trigger, including PRs, so every PR is validated
+      # against a real, fresh pull of the source data.
+      - name: Fetch latest breed data
+        env:
+          DOG_API_KEY: ${{ secrets.DOG_API_KEY }}
+        run: python ingest/fetch_breeds.py
+
+      # Pull requests build against the throwaway "dev" database so they
+      # never touch the file the dashboard reads from.
+      - name: Build and test dbt models
+        working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            dbt build --target dev
+          else
+            dbt build --target prod
+          fi
+
+      - name: Generate dbt docs
+        if: github.event_name != 'pull_request'
+        working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
+        run: dbt docs generate --target prod
+
+      # Only commit fresh data back to main outside of pull requests, so PRs
+      # stay side-effect free.
+      - name: Commit refreshed data
+        if: github.event_name != 'pull_request'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --cached --quiet || git commit -m "chore: refresh breed data [skip ci]"
+          git push
