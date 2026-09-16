@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+
+# the dev database is a throwaway scratch file rebuilt on every run
+data/warehouse_dev.duckdb
+
+# dbt build artifacts, regenerated on every run
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+.DS_Store

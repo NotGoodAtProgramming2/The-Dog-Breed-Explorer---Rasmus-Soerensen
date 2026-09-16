@@ -1,0 +1,6 @@
+requests
+duckdb
+dbt-core
+dbt-duckdb
+streamlit
+pandas
