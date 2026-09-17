@@ -1,7 +1,7 @@
 version: 2
 
 models:
-  - name: breeds
+  - name: parsed_breeds
     description: >
       One curated row per dog breed: parsed life span (years) and weight
       (kg) as numeric min/max/avg, plus a derived size_class. This is the
@@ -21,16 +21,16 @@ models:
               arguments:
                 values: ["Small", "Medium", "Large", "Giant", "Unknown"]
 
-  - name: breed_temperaments
+  - name: split_temperaments
     description: >
       One row per breed per temperament trait, exploded from the
-      comma-separated temperament list on breeds.
+      comma-separated temperament list on parsed_breeds.
     columns:
       - name: breed_id
         tests:
           - relationships:
               arguments:
-                to: ref('breeds')
+                to: ref('parsed_breeds')
                 field: breed_id
       - name: temperament
         tests:

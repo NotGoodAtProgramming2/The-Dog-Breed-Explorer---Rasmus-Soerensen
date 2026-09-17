@@ -11,7 +11,7 @@ ingest/fetch_breeds.py    →  data/raw/<date>/breeds.json   (raw, one snapshot 
                                         ↓
 dbt (staging → marts)     →  data/warehouse.duckdb          (curated tables)
                                         ↓
-dashboard/app.py (Streamlit) → charts, read straight from the warehouse
+dashboard/explorer.py (Streamlit) → charts, read straight from the warehouse
 ```
 
 - **Raw layer**: `ingest/fetch_breeds.py` calls the API, checks the response looks sane, and
@@ -40,21 +40,21 @@ DBT_PROFILES_DIR=. dbt build --target prod   # builds + tests the curated tables
 DBT_PROFILES_DIR=. dbt docs serve            # optional: browse the generated docs
 cd ..
 
-streamlit run dashboard/app.py         # opens the dashboard in your browser
+streamlit run dashboard/explorer.py    # opens the dashboard in your browser
 ```
 
 ## The curated model
 
-- `stg_breeds`: one row per breed, straight from the API, renamed/cleaned.
-- `breeds`: the main curated table — `life_span` and `weight` are parsed out of free text
+- `cleaned_breeds`: one row per breed, straight from the API, renamed/cleaned.
+- `parsed_breeds`: the main curated table — `life_span` and `weight` are parsed out of free text
   (e.g. `"12-15"` or `"Male: 25-30; Female: 20-25"`) into numeric min/max/avg columns, plus a
   derived `size_class` (Small/Medium/Large/Giant) based on average weight.
-- `breed_temperaments`: the comma-separated `temperament` list exploded into one row per
+- `split_temperaments`: the comma-separated `temperament` list exploded into one row per
   breed per trait, so it can actually be filtered and grouped.
 
 6 dbt tests cover both structural correctness (uniqueness, not-null, valid `size_class` values,
-referential integrity to `breeds`) and the parsing logic itself (a min-vs-max sanity check on
-both life span and weight).
+referential integrity to `parsed_breeds`) and the parsing logic itself (a min-vs-max sanity check
+on both life span and weight).
 
 ## What the data says
 
@@ -68,7 +68,7 @@ correlation between average weight and average life span across all 631 breeds i
 Small breeds average 13.3 years, Giant breeds average 10.6 years. This matches a well-documented
 pattern in dog biology: larger breeds tend to age faster and live shorter lives than small ones.
 
-Open the dashboard (`streamlit run dashboard/app.py`) to explore both interactively.
+Open the dashboard (`streamlit run dashboard/explorer.py`) to explore both interactively.
 
 ## Secrets
 

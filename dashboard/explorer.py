@@ -4,7 +4,7 @@ Dog Breed Explorer dashboard.
 Reads directly from the curated DuckDB warehouse (data/warehouse.duckdb),
 which the daily pipeline (ingest + dbt) keeps up to date. No extra data
 processing happens here -- the dashboard is a thin, read-only view on top
-of the marts.breeds / marts.breed_temperaments tables.
+of the parsed_breeds / split_temperaments tables.
 """
 
 from pathlib import Path
@@ -18,7 +18,7 @@ st.set_page_config(page_title="Dog Breed Explorer", page_icon="🐶", layout="wi
 st.title("🐶 Dog Breed Explorer")
 
 con = duckdb.connect(str(DB_PATH), read_only=True)
-breeds = con.execute("select * from main.breeds").df()
+breeds = con.execute("select * from main.parsed_breeds").df()
 
 st.caption(f"{len(breeds)} breeds loaded from the curated warehouse.")
 

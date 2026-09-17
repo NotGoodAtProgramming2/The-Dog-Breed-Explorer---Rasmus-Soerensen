@@ -19,14 +19,14 @@ cleanup) → dbt marts (gold, typed and business-ready). The tradeoff: I commit 
 git so the dashboard always has fresh data without re-running the pipeline. That's a binary in
 version control, which is not something I'd do for a real production system.
 
-**Transformation — dbt Core (dbt-duckdb adapter).** The interesting work was in `models/marts/breeds.sql`:
+**Transformation — dbt Core (dbt-duckdb adapter).** The interesting work was in `models/marts/parsed_breeds.sql`:
 `life_span` and `weight` arrive as free text, and I initially assumed simple ranges like `"12-15"`.
 Inspecting the real data showed 69% of breeds report weight (and height) as
 `"Male: 25-30; Female: 20-25"` instead. Extracting every number in the string and taking the overall
 min/max handles both formats correctly with one regex, rather than writing a special case for each
 pattern. `size_class` (Small/Medium/Large/Giant) is a derived bucket on average weight, thresholds
 are a judgement call I made explicit in the SQL comments. `temperament` (comma-separated) is exploded
-into a `breed_temperaments` bridge table so it's actually queryable. Two fields the API returns
+into a `split_temperaments` bridge table so it's actually queryable. Two fields the API returns
 (`bred_for`, `perfect_for`) are 100% null across all 631 breeds and were dropped rather than modeled.
 6 tests cover structure (unique/not-null keys, valid `size_class` values, referential integrity) and
 the parsing itself (a singular test asserting min ≤ max on both life span and weight, since a
