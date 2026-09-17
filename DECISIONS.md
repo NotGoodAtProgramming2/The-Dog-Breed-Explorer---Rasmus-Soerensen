@@ -14,13 +14,26 @@
 - Tradeoff: that file is stored in git. Not how you'd do it in a real production system (see "What I'd do differently").
 
 ## How data flows: raw → staging → marts
-1. **Raw** — `ingest/fetch_breeds.py` fetches data from the API and saves it untouched as a JSON file (`data/raw/...`). Nothing is changed here.
-2. **Staging** (`stg_breeds`) — dbt reads the raw JSON file. Picks out the fields we need and gives them clear names. Still raw text at this point (e.g. life span is still `"12-15"`, not numbers).
+
+1. **Raw** — `ingest/fetch_breeds.py` fetches data from the API and saves it untouched as a JSON file (`data/raw/...`). Nothing is changed here, this is the exact API response.
+
+2. **Staging** (`stg_breeds`) — dbt reads the raw JSON file and does light cleanup only, no parsing yet:
+   - `id` → renamed to `breed_id`
+   - `name` → kept as is
+   - `breed_group` → kept as is
+   - `origin` → kept as is
+   - `temperament` → kept as is (still one long comma-separated text)
+   - `life_span` → kept as is (still text, e.g. `"12-15"`)
+   - `weight.metric` → renamed to `weight_metric_raw` (still text, e.g. `"12-15"` or `"Male: 25-30; Female: 20-25"`)
+   - Dropped completely (not carried forward, not useful): `bred_for` and `perfect_for` (empty for every single breed), `species_id` (same value for every breed), `country_code`, `country_codes`, `description`, `history`, `image`, `height`, `reference_image_id`
+
 3. **Marts** (`breeds`, `breed_temperaments`) — dbt turns the text into real, usable data:
-   - Life span and weight text → real min/max/average numbers
-   - Weight → `size_class` (Small/Medium/Large/Giant)
-   - Temperament text (comma list) → split into separate rows, one per trait
-   - This is the final table the dashboard reads from.
+   - `life_span` text → split into `life_span_min_years`, `life_span_max_years`, and `life_span_avg_years` (real numbers)
+   - `weight_metric_raw` text → split into `weight_min_kg`, `weight_max_kg`, and `weight_avg_kg` (real numbers)
+   - `weight_avg_kg` → used to create a new column, `size_class` (Small/Medium/Large/Giant/Unknown)
+   - `temperament` text (one long comma list) → exploded into a separate table (`breed_temperaments`), one row per breed per trait, extra spaces trimmed off
+   - `breed_id`, `name`, `breed_group`, `origin` → carried through unchanged
+   - This is the final, clean data the dashboard reads from.
 
 ## Transformation — dbt
 - The hard part: weight/life span are text, not numbers (e.g. `"12-15"` or `"Male: 25-30; Female: 20-25"`).
