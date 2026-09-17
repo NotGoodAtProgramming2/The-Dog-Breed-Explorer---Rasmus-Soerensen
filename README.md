@@ -64,9 +64,10 @@ Answering two of the suggested questions, using the dataset as fetched:
 Fox Terrier, Rat Terrier and Silken Windhound share the top spot at 12-18 years.
 
 **Is there a relationship between size and life span?** Yes — a clear negative one. The
-correlation between average weight and average life span across all 631 breeds is **-0.67**.
-Small breeds average 13.3 years, Giant breeds average 10.6 years. This matches a well-documented
-pattern in dog biology: larger breeds tend to age faster and live shorter lives than small ones.
+correlation between average weight and average life span across 589 breeds with both values
+is **-0.67** (slope: -0.057 years per extra kg). A Pearson correlation test rejects the null
+hypothesis of no relationship decisively (p ≈ 1.1×10⁻⁷⁸). This matches a well-documented pattern
+in dog biology: larger breeds tend to age faster and live shorter lives than small ones.
 
 Open the dashboard (`streamlit run dashboard/app.py`) to explore both interactively.
 
