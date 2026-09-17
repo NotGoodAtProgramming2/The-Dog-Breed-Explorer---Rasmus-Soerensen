@@ -13,6 +13,7 @@ import altair as alt
 import duckdb
 import pandas as pd
 import streamlit as st
+from scipy import stats
 
 # Palette: validated colorblind-safe pair (blue = slot 1, orange = slot 2)
 # from the project's dataviz color reference. Orange marks the breeds with
@@ -29,7 +30,24 @@ st.title("🐶 Dog Breed Explorer")
 con = duckdb.connect(str(DB_PATH), read_only=True)
 breeds = con.execute("select * from main.breeds").df()
 
-st.caption(f"{len(breeds)} breeds loaded from the curated warehouse.")
+# --- What the curated data looks like ---
+st.header("The curated data")
+
+preview_source = breeds.assign(_id_num=breeds["breed_id"].astype(int)).sort_values("_id_num")
+top5 = preview_source.head(5).drop(columns="_id_num")
+bottom1 = preview_source.tail(1).drop(columns="_id_num")
+ellipsis_row = pd.DataFrame([{col: "…" for col in top5.columns}])
+preview_table = pd.concat([top5, ellipsis_row, bottom1], ignore_index=True)
+
+st.dataframe(preview_table, use_container_width=True, hide_index=True)
+st.caption(
+    f"{len(breeds)} breeds, one row each, after cleaning and parsing. Every breed has an "
+    "identity (name, breed_group, origin, raw temperament text) plus numeric life span "
+    "(years) and weight (kg) ranges parsed out of the source API's free text, and a "
+    "derived size_class. Rows shown: the 5 lowest breed_id values, then the single "
+    "highest, to give a sense of the full range without printing all "
+    f"{len(breeds)} rows."
+)
 
 # --- Question 1: which breeds have the longest predicted life span? ---
 st.header("Which breeds have the longest predicted life span?")
@@ -111,21 +129,85 @@ st.markdown(
 st.header("Is there a relationship between size and life span?")
 
 sized = breeds.dropna(subset=["weight_avg_kg", "life_span_avg_years"])
-correlation = sized["weight_avg_kg"].corr(sized["life_span_avg_years"])
 
-st.scatter_chart(sized, x="weight_avg_kg", y="life_span_avg_years", color="size_class")
+# Classic linear regression: slope, intercept, correlation (r), and the
+# p-value for the t-test on the slope -- which is the same test as asking
+# "is the correlation significantly different from zero?"
+slope, intercept, r, p_value, stderr = stats.linregress(
+    sized["weight_avg_kg"], sized["life_span_avg_years"]
+)
+n = len(sized)
+dof = n - 2
+t_stat = slope / stderr
 
-direction = "negative" if correlation < 0 else "positive"
+points = (
+    alt.Chart(sized)
+    .mark_circle(size=40, opacity=0.6)
+    .encode(
+        x=alt.X("weight_avg_kg:Q", title="Average weight (kg)"),
+        y=alt.Y("life_span_avg_years:Q", title="Average life span (years)"),
+        color=alt.Color("size_class:N", title="Size class"),
+        tooltip=["name", "weight_avg_kg", "life_span_avg_years", "size_class"],
+    )
+)
+
+trend = (
+    alt.Chart(sized)
+    .transform_regression("weight_avg_kg", "life_span_avg_years")
+    .mark_line(color=COLOR_TEXT, strokeDash=[6, 3], strokeWidth=2)
+    .encode(x="weight_avg_kg:Q", y="life_span_avg_years:Q")
+)
+
+# Label the trend line with its slope, placed at its right-hand end.
+x_max = sized["weight_avg_kg"].max()
+slope_label = pd.DataFrame(
+    [{"x": x_max, "y": slope * x_max + intercept, "text": f"slope: {slope:.3f} years/kg"}]
+)
+trend_label = (
+    alt.Chart(slope_label)
+    .mark_text(align="right", dy=-8, fontWeight="bold", color=COLOR_TEXT)
+    .encode(x="x:Q", y="y:Q", text="text")
+)
+
+st.altair_chart((points + trend + trend_label).properties(height=420), use_container_width=True)
+
+direction = "negative" if r < 0 else "positive"
 st.markdown(
-    f"Correlation between average weight and average life span: **{correlation:.2f}** "
-    f"({direction}). Heavier breeds tend to live shorter lives, in line with the well "
-    "known pattern that larger dogs age faster than small ones."
+    f"There's a clear {direction} relationship: on average, life span drops by "
+    f"**{abs(slope):.3f} years for every extra kg** of body weight."
 )
 
-avg_by_size = (
-    sized.groupby("size_class")["life_span_avg_years"]
-    .mean()
-    .round(1)
-    .sort_values(ascending=False)
+st.markdown("**Hypothesis test: is this relationship real, or could it be random chance?**")
+st.markdown(
+    "This is a classic Pearson correlation test. The null hypothesis (H0) says there is "
+    "*no* linear relationship between weight and life span (correlation = 0) -- i.e. any "
+    "pattern we see is just random noise in this sample. We test that against the "
+    "alternative (H1: correlation ≠ 0) using a t-test on the slope. If the p-value is "
+    "below 0.05, we reject H0."
 )
-st.bar_chart(avg_by_size)
+
+stats_table = pd.DataFrame(
+    {
+        "Statistic": [
+            "Correlation (r)",
+            "Sample size (n)",
+            "Slope (years/kg)",
+            "t-statistic",
+            "Degrees of freedom",
+            "p-value",
+            "Conclusion (α = 0.05)",
+        ],
+        "Value": [
+            f"{r:.3f}",
+            f"{n}",
+            f"{slope:.4f}",
+            f"{t_stat:.2f}",
+            f"{dof}",
+            f"{p_value:.2e}",
+            "Reject H0 -- the relationship is statistically significant"
+            if p_value < 0.05
+            else "Fail to reject H0",
+        ],
+    }
+)
+st.table(stats_table.set_index("Statistic"))

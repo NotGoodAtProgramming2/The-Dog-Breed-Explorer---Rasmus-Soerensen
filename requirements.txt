@@ -5,3 +5,4 @@ dbt-duckdb
 streamlit
 pandas
 altair
+scipy
