@@ -1,7 +1,7 @@
 version: 2
 
 models:
-  - name: cleaned_breeds
+  - name: stg_breeds
     description: >
       One row per breed straight from the latest Dog API snapshot, with
       cleaned-up column names. Text fields (life_span, weight_metric_raw,

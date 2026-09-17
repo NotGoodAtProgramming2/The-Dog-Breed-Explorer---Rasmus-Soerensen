@@ -6,7 +6,7 @@ with split as (
     select
         breed_id,
         trim(unnest(string_split(temperament_raw, ','))) as temperament
-    from {{ ref('parsed_breeds') }}
+    from {{ ref('breeds') }}
     where temperament_raw is not null
 )
 

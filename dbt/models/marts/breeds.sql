@@ -18,7 +18,7 @@ with extracted_numbers as (
         temperament,
         regexp_extract_all(life_span, '[0-9]+(\.[0-9]+)?') as life_span_numbers,
         regexp_extract_all(weight_metric_raw, '[0-9]+(\.[0-9]+)?') as weight_numbers
-    from {{ ref('cleaned_breeds') }}
+    from {{ ref('stg_breeds') }}
 ),
 
 typed as (
