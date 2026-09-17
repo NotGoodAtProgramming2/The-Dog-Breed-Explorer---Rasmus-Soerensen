@@ -4,3 +4,4 @@ dbt-core
 dbt-duckdb
 streamlit
 pandas
+altair

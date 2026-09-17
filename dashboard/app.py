@@ -9,8 +9,17 @@ of the marts.breeds / marts.breed_temperaments tables.
 
 from pathlib import Path
 
+import altair as alt
 import duckdb
+import pandas as pd
 import streamlit as st
+
+# Palette: validated colorblind-safe pair (blue = slot 1, orange = slot 2)
+# from the project's dataviz color reference. Orange marks the breeds with
+# the longest predicted life span; blue (faded) is everything else.
+COLOR_OTHER = "#2a78d6"
+COLOR_TOP = "#eb6834"
+COLOR_TEXT = "#0b0b0b"
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "warehouse.duckdb"
 
@@ -25,20 +34,77 @@ st.caption(f"{len(breeds)} breeds loaded from the curated warehouse.")
 # --- Question 1: which breeds have the longest predicted life span? ---
 st.header("Which breeds have the longest predicted life span?")
 
-top_n = st.slider("Number of breeds to show", 5, 30, 15)
-longest_lived = (
+# One row per breed, sorted so the lowest life span sits at the left (near
+# the y-axis) and the highest sits at the right (furthest from it).
+life_span = (
     breeds.dropna(subset=["life_span_avg_years"])
-    .sort_values("life_span_avg_years", ascending=False)
-    .head(top_n)
-    .set_index("name")
+    .sort_values("life_span_avg_years")
+    .reset_index(drop=True)
 )
-st.bar_chart(longest_lived["life_span_avg_years"])
+life_span["rank"] = range(len(life_span))
 
-top_breed = longest_lived.iloc[0]
+max_avg = life_span["life_span_avg_years"].max()
+life_span["is_top"] = life_span["life_span_avg_years"] == max_avg
+top_breeds = life_span[life_span["is_top"]].copy().reset_index(drop=True)
+
+# Extra headroom above the highest span, so the stacked top-breed labels
+# (added below) have room to sit inside the chart without overlapping data.
+y_domain = [0, life_span["life_span_max_years"].max() + 4]
+y_scale = alt.Scale(domain=y_domain)
+
+# A thin line per breed spanning its reported min-to-max life span.
+spans = (
+    alt.Chart(life_span)
+    .mark_rule(strokeWidth=1.5)
+    .encode(
+        x=alt.X("rank:Q", axis=None, title="Breeds, sorted by predicted life span"),
+        y=alt.Y("life_span_min_years:Q", title="Life span (years)", scale=y_scale),
+        y2="life_span_max_years:Q",
+        color=alt.condition("datum.is_top", alt.value(COLOR_TOP), alt.value(COLOR_OTHER)),
+        opacity=alt.condition("datum.is_top", alt.value(0.9), alt.value(0.3)),
+        tooltip=["name", "life_span_min_years", "life_span_max_years"],
+    )
+)
+
+# The min and max endpoints of each span, as points.
+endpoints = pd.concat(
+    [
+        life_span.assign(years=life_span["life_span_min_years"]),
+        life_span.assign(years=life_span["life_span_max_years"]),
+    ]
+)
+points = (
+    alt.Chart(endpoints)
+    .mark_point(filled=True, size=18)
+    .encode(
+        x=alt.X("rank:Q", axis=None),
+        y=alt.Y("years:Q", scale=y_scale),
+        color=alt.condition("datum.is_top", alt.value(COLOR_TOP), alt.value(COLOR_OTHER)),
+        opacity=alt.condition("datum.is_top", alt.value(0.9), alt.value(0.3)),
+        tooltip=["name", "years"],
+    )
+)
+
+# Name the tied top breeds directly on the chart. They all sit at the same
+# value, so a plain label per point would overlap into unreadable text --
+# instead, stack them in a vertical list anchored to one x position, using
+# the headroom reserved above via y_domain.
+top_breeds["label_rank"] = top_breeds["rank"].min()
+top_breeds["label_y"] = y_domain[1] - 1.2 * top_breeds.index
+
+labels = (
+    alt.Chart(top_breeds)
+    .mark_text(align="left", dx=6, fontWeight="bold", color=COLOR_TEXT)
+    .encode(x="label_rank:Q", y=alt.Y("label_y:Q", scale=y_scale), text="name")
+)
+
+st.altair_chart((spans + points + labels).properties(height=420), use_container_width=True)
+
+top_row = top_breeds.iloc[0]
 st.markdown(
-    f"**{longest_lived.index[0]}** tops the list with a predicted life span of "
-    f"**{top_breed['life_span_min_years']:.0f}-{top_breed['life_span_max_years']:.0f} years**. "
-    "Several breeds share the same reported range, so ties at the top are common."
+    f"**{len(top_breeds)} breeds share the longest predicted life span** "
+    f"({top_row['life_span_min_years']:.0f}-{top_row['life_span_max_years']:.0f} years, "
+    f"highlighted in orange): {', '.join(top_breeds['name'])}."
 )
 
 # --- Question 2: relationship between size and life span ---
