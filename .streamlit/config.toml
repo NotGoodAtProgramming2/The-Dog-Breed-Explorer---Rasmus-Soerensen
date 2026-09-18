@@ -1,0 +1,9 @@
+# Editorial theme matching heyra.ai's research paper style: warm off-white
+# surface, black ink, amber accent. Fonts and finer details (eyebrow labels,
+# callout boxes) are layered on top with CSS in dashboard/app.py.
+[theme]
+base = "light"
+primaryColor = "#c96a1f"
+backgroundColor = "#f9f6ef"
+secondaryBackgroundColor = "#efe8d8"
+textColor = "#1a1a1a"

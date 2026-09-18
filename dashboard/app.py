@@ -15,17 +15,64 @@ import pandas as pd
 import streamlit as st
 from scipy import stats
 
-# Palette: validated colorblind-safe pair (blue = slot 1, orange = slot 2)
-# from the project's dataviz color reference. Orange marks the breeds with
-# the longest predicted life span; blue (faded) is everything else.
-COLOR_OTHER = "#2a78d6"
-COLOR_TOP = "#eb6834"
-COLOR_TEXT = "#0b0b0b"
+# Editorial theme (matching heyra.ai): warm neutrals + one amber accent,
+# used instead of a blue/orange tech palette. "Other" data recedes in a
+# muted warm gray; the amber accent is reserved for what the chart is
+# actually pointing at (the top breeds, the trend line).
+COLOR_OTHER = "#a9a08c"
+COLOR_TOP = "#c96a1f"
+COLOR_TEXT = "#1a1a1a"
+
+# size_class is ordinal (Small < Medium < Large < Giant), so it gets a
+# single-hue amber ramp light-to-dark rather than arbitrary categorical
+# hues -- the ramp itself encodes the ordering.
+SIZE_CLASS_COLORS = {
+    "Small": "#f1ddb8",
+    "Medium": "#dba24f",
+    "Large": "#b3691f",
+    "Giant": "#5c3a1e",
+    "Unknown": "#c7c2b4",
+}
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "warehouse.duckdb"
 
 st.set_page_config(page_title="Dog Breed Explorer", page_icon="🐶", layout="wide")
-st.title("🐶 Dog Breed Explorer")
+
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&display=swap');
+
+    h1, h2, h3 { font-family: 'Source Serif 4', Georgia, serif !important; }
+
+    .eyebrow {
+        font-family: system-ui, sans-serif;
+        font-size: 0.78rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #7a7263;
+        margin-bottom: 0.2rem;
+    }
+    .callout {
+        border-left: 3px solid #c96a1f;
+        background: #efe8d8;
+        padding: 0.9rem 1.1rem;
+        font-size: 1.05rem;
+        color: #1a1a1a;
+        margin-bottom: 1.2rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown('<div class="eyebrow">Heyra Data Platform &middot; Daily Refresh</div>', unsafe_allow_html=True)
+st.title("Dog Breed Explorer")
+st.markdown(
+    '<div class="callout">A curated analytics layer over the Dog API, rebuilt daily: '
+    "raw breed data is cleaned, typed, and parsed into the numbers below.</div>",
+    unsafe_allow_html=True,
+)
 
 con = duckdb.connect(str(DB_PATH), read_only=True)
 breeds = con.execute("select * from main.breeds").df()
@@ -142,11 +189,18 @@ t_stat = slope / stderr
 
 points = (
     alt.Chart(sized)
-    .mark_circle(size=40, opacity=0.6)
+    .mark_circle(size=40, opacity=0.75)
     .encode(
         x=alt.X("weight_avg_kg:Q", title="Average weight (kg)"),
         y=alt.Y("life_span_avg_years:Q", title="Average life span (years)"),
-        color=alt.Color("size_class:N", title="Size class"),
+        color=alt.Color(
+            "size_class:N",
+            title="Size class",
+            scale=alt.Scale(
+                domain=list(SIZE_CLASS_COLORS.keys()),
+                range=list(SIZE_CLASS_COLORS.values()),
+            ),
+        ),
         tooltip=["name", "weight_avg_kg", "life_span_avg_years", "size_class"],
     )
 )
