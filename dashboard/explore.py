@@ -2,6 +2,7 @@
 from dashboard/app.py (the analytics dashboard). Same warehouse, same data,
 different audience: this one is for exploring breeds, not analyzing them."""
 
+import math
 import urllib.parse
 from pathlib import Path
 
@@ -26,26 +27,149 @@ COUNTRY_ALIASES = {
     "Tibet": "China",
 }
 
-# Short, plain-language descriptions for the traits shown in the word cloud.
+# Longer, plain-language descriptions for the traits shown in the word cloud
+# -- what the trait tends to look like day to day, not just a one-liner.
 TRAIT_DESCRIPTIONS = {
-    "intelligent": "Quick to learn, and good at solving problems on their own.",
-    "loyal": "Forms strong, lasting bonds with their family.",
-    "alert": "Attentive, and quick to notice changes around them.",
-    "energetic": "Needs plenty of exercise and activity to stay happy.",
-    "courageous": "Brave, and unafraid to face challenges or danger.",
-    "independent": "Comfortable making their own decisions; doesn't need constant guidance.",
-    "affectionate": "Enjoys physical closeness and showing love to their people.",
-    "friendly": "Warms up easily to people and other animals.",
-    "protective": "Watchful over their family and territory.",
-    "playful": "Enjoys games, and keeps a fun-loving spirit.",
-    "confident": "Self-assured in new situations and surroundings.",
-    "gentle": "Calm and mild-mannered, especially around children.",
-    "calm": "Relaxed and even-tempered; not easily startled.",
-    "work-focused": "Bred for a job, and thrives when given tasks to do.",
-    "devoted": "Deeply attached to their owner -- often a \"one-person\" dog.",
-    "outgoing": "Sociable, and eager to meet new people or animals.",
-    "adaptable": "Adjusts easily to new environments and routines.",
-    "eager to please": "Motivated to make their owner happy; often easy to train.",
+    "intelligent": (
+        "Intelligent dogs pick up new commands and routines quickly, often after just a few "
+        "repetitions. They tend to problem-solve on their own -- figuring out how to open doors, "
+        "find hidden treats, or work around obstacles. This same sharpness means they need mental "
+        "stimulation, not just exercise; a bored intelligent dog will often invent its own games, "
+        "which aren't always the games you'd choose. Puzzle toys, scent work, and ongoing training "
+        "keep them satisfied."
+    ),
+    "loyal": (
+        "A loyal dog forms deep, lasting attachments to their family and stays devoted through "
+        "the years. They tend to check in often, follow their owner from room to room, and settle "
+        "best when their people are nearby. This bond can make them excellent watchdogs and "
+        "companions, but it also means they can struggle with long absences or being rehomed. "
+        "Loyal breeds usually reward consistent, patient handling with unwavering trust."
+    ),
+    "alert": (
+        "An alert dog notices sounds, movement, and changes in their environment before most "
+        "people do. They're quick to raise their head, prick their ears, or bark at something "
+        "unusual, which makes them naturally good at signaling visitors or potential issues. This "
+        "watchfulness is useful for a family that wants a heads-up, but it can also mean more "
+        "barking than some households want. Alert dogs generally settle down once they've "
+        "confirmed there's no real threat."
+    ),
+    "energetic": (
+        "Energetic dogs have a high drive to move, play, and explore, and they don't tire out "
+        "easily. Without enough daily exercise, that energy tends to come out as restlessness, "
+        "chewing, or excessive barking. They do best with owners who enjoy long walks, runs, or "
+        "active play sessions, and they often thrive in dog sports like agility or fetch-based "
+        "games. A tired energetic dog is usually a calm, happy one."
+    ),
+    "courageous": (
+        "Courageous dogs face new situations, unfamiliar animals, or potential threats without "
+        "backing down. This bravery historically made many of these breeds effective at guarding, "
+        "hunting, or working alongside people in demanding conditions. At home, it can translate "
+        "into confidence around strangers or other animals, though it sometimes means they don't "
+        "back away from confrontations they should avoid. Consistent socialization channels this "
+        "courage constructively."
+    ),
+    "independent": (
+        "Independent dogs are comfortable making their own decisions and don't need constant "
+        "direction or reassurance from their owner. They can happily entertain themselves and "
+        "often approach training on their own terms rather than eagerly seeking approval. This "
+        "self-reliance was often bred for specific jobs, like hunting or herding at a distance, "
+        "where a dog had to think for itself. Patient, respect-based training usually works "
+        "better than repetition-heavy methods."
+    ),
+    "affectionate": (
+        "Affectionate dogs actively seek out physical closeness -- leaning against legs, climbing "
+        "into laps, or wanting to be touched and petted often. They tend to form warm bonds "
+        "quickly and enjoy being included in everyday family life rather than kept at a distance. "
+        "This makes them wonderful companions for people who want a dog that's demonstrative with "
+        "its love. The flip side is that affectionate breeds can be prone to separation anxiety if "
+        "left alone too often."
+    ),
+    "friendly": (
+        "A friendly dog warms up quickly to new people, children, and often other animals, with "
+        "little of the wariness some breeds show toward strangers. They tend to greet visitors "
+        "with enthusiasm rather than suspicion, making them popular family pets. This openness "
+        "usually extends to other dogs at the park or in group settings, though it doesn't replace "
+        "proper introductions. Friendly breeds are generally easygoing about changes in their "
+        "social circle."
+    ),
+    "protective": (
+        "Protective dogs are naturally watchful over their family, home, and territory, and they'll "
+        "position themselves between their people and anything they see as a threat. This instinct "
+        "made many of these breeds valuable as guardians historically, and it still shows up today "
+        "as alertness toward strangers or unfamiliar situations. With good socialization, "
+        "protectiveness stays measured rather than aggressive. Owners should still supervise "
+        "interactions with unfamiliar visitors."
+    ),
+    "playful": (
+        "Playful dogs keep a fun-loving, youthful attitude well into adulthood, always ready for a "
+        "game of fetch, tug, or chase. They tend to initiate play with people and other dogs, and "
+        "they often use toys or invented games to burn off energy. This trait makes them "
+        "entertaining, engaging companions, especially for active households or families with "
+        "children. A playful dog that isn't given enough outlets can get creative in less welcome "
+        "ways, like turning shoes into toys."
+    ),
+    "confident": (
+        "Confident dogs walk into new environments, meet new people, and handle unexpected "
+        "situations without much hesitation. They rarely seem intimidated, and they recover "
+        "quickly from startling moments rather than staying anxious. This makes them well-suited "
+        "to busy households, travel, or public outings where a nervous dog might struggle. "
+        "Confidence should be nurtured with positive experiences early on so it doesn't tip into "
+        "pushiness."
+    ),
+    "gentle": (
+        "Gentle dogs are soft and careful in how they interact, especially with children, the "
+        "elderly, or smaller animals. They tend to have a naturally calm way of engaging physically "
+        "-- leaning in slowly rather than jumping or barreling forward. This makes them popular "
+        "choices for families or first-time owners who want a low-drama companion. Gentle "
+        "temperaments often respond better to a soft training approach than a firm one."
+    ),
+    "calm": (
+        "Calm dogs have an even-tempered, relaxed default state, and they aren't easily rattled by "
+        "noise, chaos, or new situations. They tend to settle quickly after excitement rather than "
+        "staying wound up, and they're comfortable with quieter households. This makes them a good "
+        "fit for apartment living or owners who prefer a low-key companion. Calm doesn't mean "
+        "lazy, though -- many calm breeds are still happy to be active when asked."
+    ),
+    "work-focused": (
+        "Work-focused dogs were bred for a specific job -- herding, guarding, hunting, or pulling "
+        "-- and they still carry that drive to have a task. They tend to thrive when given "
+        "structure, a routine, or something purposeful to do each day, rather than being left "
+        "without direction. Without an outlet, that drive can turn into restlessness or the dog "
+        "inventing its own \"job,\" which isn't always convenient for the household. Training, "
+        "sport, or simple daily chores can satisfy this need."
+    ),
+    "devoted": (
+        "Devoted dogs attach strongly to one person or their close family, often more intensely "
+        "than the average dog. They tend to shadow their favorite person around the house and seek "
+        "them out specifically, sometimes at the expense of bonding evenly with everyone. This "
+        "deep attachment makes them incredibly rewarding companions for that person, but it can "
+        "mean more difficulty adjusting to a new owner or household. Devoted breeds usually settle "
+        "in for life once that bond is formed."
+    ),
+    "outgoing": (
+        "Outgoing dogs actively seek out new people, animals, and experiences rather than waiting "
+        "to be approached. They tend to greet strangers with enthusiasm and adapt easily to busy, "
+        "social environments like parks, cafes, or gatherings. This makes them great companions "
+        "for people who like to bring their dog everywhere. An outgoing dog still benefits from "
+        "basic manners training, since their eagerness to meet everyone can come across as overly "
+        "forward without it."
+    ),
+    "adaptable": (
+        "Adaptable dogs adjust easily to new homes, routines, schedules, or environments without "
+        "much stress. They tend to cope well with change -- a move, a new baby, a different "
+        "walking schedule -- better than more rigid breeds. This flexibility makes them a solid "
+        "choice for owners whose lives don't always follow the same pattern, like frequent "
+        "travelers or growing families. Adaptable dogs still appreciate some consistency, but they "
+        "don't fall apart without it."
+    ),
+    "eager to please": (
+        "Dogs that are eager to please are highly motivated by their owner's approval, which makes "
+        "them attentive during training and quick to respond to feedback. They tend to watch their "
+        "person closely for cues and adjust their behavior based on praise or correction. This "
+        "makes them some of the easier breeds to train, especially with positive reinforcement. "
+        "The downside is they can be sensitive to a harsh tone or repeated correction, so a gentle, "
+        "encouraging approach gets the best results."
+    ),
 }
 
 
@@ -91,9 +215,13 @@ st.markdown(
     }
     .group-tile .count { color: #7a7263; font-size: 0.78rem; }
 
-    .mini-card {
-        border: 1px solid #e1e0d9; border-radius: 12px; background: #fff;
-        padding: 1rem; height: 100%;
+    .section-title {
+        font-family: 'Source Serif 4', Georgia, serif;
+        font-size: 1.35rem; font-weight: 700; color: #1a1a1a;
+        margin-bottom: 0.6rem;
+    }
+    .trait-description {
+        font-size: 0.92rem; color: #52514e; line-height: 1.5; margin-top: 0.5rem;
     }
 
     .breed-card {
@@ -269,7 +397,7 @@ def render_home():
 
 def render_origin_map(col):
     with col:
-        st.markdown('<div class="mini-card"><b>Where dogs come from</b><br>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Where dogs come from</div>', unsafe_allow_html=True)
         counts = (
             breeds.assign(country=breeds["origin"].map(extract_country))
             .groupby("country").size().reset_index(name="count")
@@ -289,71 +417,89 @@ def render_origin_map(col):
             paper_bgcolor="rgba(0,0,0,0)",
         )
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_temperament_cloud(col):
     with col:
-        st.markdown('<div class="mini-card"><b>Explore temperaments</b><br><br>', unsafe_allow_html=True)
-        counts = temperaments_all["temperament"].value_counts().head(18)
+        st.markdown('<div class="section-title">Explore temperaments</div>', unsafe_allow_html=True)
+        counts = temperaments_all["temperament"].value_counts().head(13)
         lo, hi = counts.min(), counts.max()
         palette = ["#c96a1f", "#7a4a1f", "#3a6a5c", "#a03d3d", "#4a3aa7", "#1a1a1a", "#b3691f", "#2a6a4a"]
-
-        # Tier the words by frequency, then place the biggest tier in the
-        # middle row and taper outward, so the most common trait reads as
-        # the visual center of the cloud, not just the biggest word in a
-        # left-to-right list.
-        tier_sizes = [1, 2, 3, 4, 4, 4]
         traits_sorted = list(counts.items())
-        tiers, idx = [], 0
-        for size in tier_sizes:
-            tiers.append(traits_sorted[idx : idx + size])
-            idx += size
-        offsets = [0, -1, 1, -2, 2, -3][: len(tiers)]
-        ordered_tiers = [tier for _, tier in sorted(zip(offsets, tiers), key=lambda t: t[0])]
 
-        color_i = 0
-        rows_html = []
-        for tier in ordered_tiers:
-            spans = []
-            for trait, count in tier:
-                size_px = 13 + 27 * ((count - lo) / max(1, hi - lo))
-                color = palette[color_i % len(palette)]
-                color_i += 1
+        # Radial layout: the single most common trait sits dead center, and
+        # each ring further out holds more (smaller) words, evenly spaced
+        # around the circle -- a real word-cloud shape, not a left-to-right list.
+        # Ring 1's angles skip the band directly left/right of center (0/180
+        # degrees), since the center word is wide and words placed there would
+        # collide with it even at a fairly generous radius.
+        ring_sizes = [1, 5, 7]
+        radii = [0, 118, 178]
+        ring_angles = {1: [-90, -145, -35, 145, 35]}
+        canvas_height = 400
+
+        spans = []
+        idx = 0
+        for ring_i, (ring_size, radius) in enumerate(zip(ring_sizes, radii)):
+            ring_traits = traits_sorted[idx : idx + ring_size]
+            idx += ring_size
+            angles = ring_angles.get(ring_i) or [
+                -90 + ring_i * 15 + j * (360 / max(1, ring_size)) for j in range(ring_size)
+            ]
+            for j, (trait, count) in enumerate(ring_traits):
+                angle = math.radians(angles[j])
+                dx = radius * math.cos(angle)
+                dy = radius * math.sin(angle)
+                size_px = 13 + 21 * ((count - lo) / max(1, hi - lo))
+                color = palette[idx % len(palette)]
                 href = f"?trait={urllib.parse.quote(trait)}"
                 spans.append(
-                    f'<a href="{href}" target="_self" style="font-size:{size_px:.0f}px;color:{color};'
-                    f'font-weight:700;text-decoration:none;margin:0 10px;white-space:nowrap;'
-                    f'flex-shrink:0;">{trait.capitalize()}</a>'
+                    f'<a href="{href}" target="_self" style="position:absolute; '
+                    f'left:calc(50% + {dx:.0f}px); top:calc({canvas_height / 2:.0f}px + {dy:.0f}px); '
+                    f'transform:translate(-50%,-50%); font-size:{size_px:.0f}px; color:{color}; '
+                    f'font-weight:700; text-decoration:none; white-space:nowrap;">{trait.capitalize()}</a>'
                 )
-            rows_html.append(f'<div style="display:flex;flex-wrap:wrap;justify-content:center;">{"".join(spans)}</div>')
 
-        st.markdown("".join(rows_html) + "</div>", unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="position:relative; width:100%; height:{canvas_height}px;">{"".join(spans)}</div>',
+            unsafe_allow_html=True,
+        )
 
 
 def render_size_vs_life_span(col):
     with col:
         st.markdown(
-            '<div class="mini-card"><b>Is there a relationship between size and life span?</b><br>',
+            '<div class="section-title">Is there a relationship between size and life span?</div>',
             unsafe_allow_html=True,
         )
         sized = breeds.dropna(subset=["weight_avg_kg", "life_span_avg_years"])
         slope, intercept, r, p_value, stderr = stats.linregress(
             sized["weight_avg_kg"], sized["life_span_avg_years"]
         )
+        y_scale = alt.Scale(domain=[5, 16])  # pulled toward 0 instead of auto-cropping to the data
         points = alt.Chart(sized).mark_circle(size=25, opacity=0.6, color=COLOR_ACCENT).encode(
             x=alt.X("weight_avg_kg:Q", title="Weight (kg)"),
-            y=alt.Y("life_span_avg_years:Q", title="Life span (yrs)"),
+            y=alt.Y("life_span_avg_years:Q", title="Life span (yrs)", scale=y_scale),
         )
         trend = alt.Chart(sized).transform_regression(
             "weight_avg_kg", "life_span_avg_years"
-        ).mark_line(color=COLOR_TEXT, strokeDash=[4, 3]).encode(x="weight_avg_kg:Q", y="life_span_avg_years:Q")
-        st.altair_chart((points + trend).properties(height=230), use_container_width=True)
-        st.caption(
-            f"Correlation: {r:.2f} (slope {slope:.3f} yrs/kg) -- bigger dogs tend to live shorter lives. "
-            "Full stats on the analytics dashboard."
+        ).mark_line(color=COLOR_TEXT, strokeDash=[4, 3]).encode(
+            x="weight_avg_kg:Q", y=alt.Y("life_span_avg_years:Q", scale=y_scale)
         )
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.altair_chart((points + trend).properties(height=230), use_container_width=True)
+        st.markdown(
+            '<div class="trait-description">'
+            "Each dot is one breed: its weight (left-right) and how long it's expected to live "
+            "(up-down). The dashed line is the general trend -- it slopes down, meaning heavier "
+            "breeds tend to live shorter lives on average. "
+            f"<b>Correlation</b> ({r:.2f}) says how <i>strongly</i> the two are linked, on a scale "
+            "from -1 (perfectly opposite) to +1 (perfectly together) -- it doesn't use any units. "
+            f"<b>Slope</b> ({slope:.3f} yrs/kg) says <i>how much</i> life span actually drops for "
+            "every extra kg of weight, in real years. Correlation tells you how tight the pattern "
+            "is; slope tells you the actual rate. Full statistical test on the analytics dashboard."
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
 
 # -------------------------------------------------------------- BROWSE ----
