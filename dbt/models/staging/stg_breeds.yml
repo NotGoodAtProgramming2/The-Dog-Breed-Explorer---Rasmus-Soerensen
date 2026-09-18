@@ -2,10 +2,7 @@ version: 2
 
 models:
   - name: stg_breeds
-    description: >
-      One row per breed straight from the latest Dog API snapshot, with
-      cleaned-up column names. Text fields (life_span, weight_metric_raw,
-      temperament) are still raw/unparsed at this stage.
+    description: One row per breed, renamed fields, still unparsed text.
     columns:
       - name: breed_id
         description: Unique breed identifier from the source API.

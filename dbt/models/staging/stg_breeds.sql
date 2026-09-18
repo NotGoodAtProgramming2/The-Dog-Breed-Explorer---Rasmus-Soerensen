@@ -1,10 +1,6 @@
--- Reads the latest raw snapshot straight off disk and gives fields sane
--- names. No parsing/typing yet, that happens in marts/breeds.sql -- this
--- model is a 1:1 cleanup of the source JSON.
---
--- We drop a few fields from the source that carry no information for every
--- single breed in the current dataset (bred_for, perfect_for) or that are
--- constant across all rows (species_id is always "2", i.e. dogs).
+-- 1:1 cleanup of the raw JSON: sane field names, no parsing yet (that's
+-- marts/breeds.sql). Drops bred_for/perfect_for (always empty) and
+-- species_id (always "2", i.e. dogs).
 
 select
     id::varchar as breed_id,

@@ -1,7 +1,7 @@
 # Dog Breed Explorer
 
-A small, curated analytics layer on top of [The Dog API](https://www.thedogapi.com/), refreshed
-daily. See [DECISIONS.md](DECISIONS.md) for the reasoning behind every tool choice and tradeoff.
+A curated analytics layer over [The Dog API](https://www.thedogapi.com/), refreshed daily.
+See [DECISIONS.md](DECISIONS.md) for the reasoning behind every choice.
 
 ## How it fits together
 
@@ -14,15 +14,13 @@ dbt (staging → marts)     →  data/warehouse.duckdb          (curated tables)
 dashboard/app.py (Streamlit) → charts, read straight from the warehouse
 ```
 
-- **Raw layer**: `ingest/fetch_breeds.py` calls the API, checks the response looks sane, and
-  writes it to disk untouched. Every day gets its own dated folder (a permanent history), plus a
-  `latest.json` pointer that always has the newest data.
-- **Curated layer**: dbt reads `latest.json`, parses the messy text fields, and writes clean
-  tables into `data/warehouse.duckdb` (a single-file DuckDB database).
-- **Dashboard**: a Streamlit app queries that same DuckDB file directly.
-- **Automation**: one GitHub Actions workflow (`.github/workflows/pipeline.yml`) runs the whole
-  chain daily at 02:00 UTC, on every pull request (to catch breakages before merge), and on
-  demand. On non-PR runs it commits the refreshed data back to the repo.
+- **Raw**: `ingest/fetch_breeds.py` calls the API, checks the response, writes it untouched.
+  One dated folder per day, plus a `latest.json` pointer to the newest.
+- **Curated**: dbt reads `latest.json`, parses the messy text, writes clean tables into
+  `data/warehouse.duckdb`.
+- **Dashboard**: a Streamlit app queries that same file directly.
+- **Automation**: one GitHub Actions workflow runs the whole chain daily at 02:00 UTC, on
+  every pull request, and on demand. Non-PR runs commit the refreshed data back.
 
 ## Running it locally
 
@@ -30,53 +28,44 @@ dashboard/app.py (Streamlit) → charts, read straight from the warehouse
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-cp .env.example .env      # then paste your key from https://www.thedogapi.com/signup
+cp .env.example .env      # paste your key from https://www.thedogapi.com/signup
 source .env
 
-python ingest/fetch_breeds.py          # fetches today's data
+python ingest/fetch_breeds.py
 
 cd dbt
-DBT_PROFILES_DIR=. dbt build --target prod   # builds + tests the curated tables
-DBT_PROFILES_DIR=. dbt docs serve            # optional: browse the generated docs
+DBT_PROFILES_DIR=. dbt build --target prod
 cd ..
 
-streamlit run dashboard/app.py         # opens the dashboard in your browser
+streamlit run dashboard/app.py
 ```
 
 ## The curated model
 
-- `stg_breeds`: one row per breed, straight from the API, renamed/cleaned.
-- `breeds`: the main curated table — `life_span` and `weight` are parsed out of free text
-  (e.g. `"12-15"` or `"Male: 25-30; Female: 20-25"`) into numeric min/max/avg columns, plus a
-  derived `size_class` (Small/Medium/Large/Giant) based on average weight.
-- `breed_temperaments`: the comma-separated `temperament` list exploded into one row per
-  breed per trait, so it can actually be filtered and grouped.
+- `stg_breeds`: one row per breed, renamed fields, still raw text.
+- `breeds`: the main table — `life_span`/`weight` parsed into numeric min/max/avg, plus a
+  derived `size_class` (Small/Medium/Large/Giant).
+- `breed_temperaments`: the comma-separated `temperament` list exploded to one row per trait.
 
-6 dbt tests cover both structural correctness (uniqueness, not-null, valid `size_class` values,
-referential integrity to `breeds`) and the parsing logic itself (a min-vs-max sanity check on
-both life span and weight).
+6 dbt tests: structural correctness (uniqueness, not-null, valid `size_class`, referential
+integrity) plus a min-vs-max sanity check on the parsed numbers.
 
 ## What the data says
 
-Answering two of the suggested questions, using the dataset as fetched:
+**Longest predicted life span?** Denmark Feist, Koolie, Miniature Fox Terrier, Rat Terrier,
+and Silken Windhound share the top spot at 12-18 years.
 
-**Which breeds have the longest predicted life span?** The Denmark Feist, Koolie, Miniature
-Fox Terrier, Rat Terrier and Silken Windhound share the top spot at 12-18 years.
+**Size vs. life span?** A clear negative relationship: correlation **-0.67** across 589 breeds
+(slope -0.057 years/kg). A Pearson test rejects "no relationship" decisively (p ≈ 1.1×10⁻⁷⁸) —
+larger breeds age faster, matching known dog biology.
 
-**Is there a relationship between size and life span?** Yes — a clear negative one. The
-correlation between average weight and average life span across 589 breeds with both values
-is **-0.67** (slope: -0.057 years per extra kg). A Pearson correlation test rejects the null
-hypothesis of no relationship decisively (p ≈ 1.1×10⁻⁷⁸). This matches a well-documented pattern
-in dog biology: larger breeds tend to age faster and live shorter lives than small ones.
-
-Open the dashboard (`streamlit run dashboard/app.py`) to explore both interactively.
+Open the dashboard (`streamlit run dashboard/app.py`) to explore both.
 
 ## Secrets
 
-The Dog API now requires a free API key (it didn't when this project brief was written). Locally
-it's read from a `.env` file (gitignored, never committed — see `.env.example`). In CI it must be
-added as a repository secret named `DOG_API_KEY` (Settings → Secrets and variables → Actions).
+The Dog API now requires a free key (it didn't when this brief was written). Locally: a
+gitignored `.env` file (see `.env.example`). In CI: a repository secret named `DOG_API_KEY`.
 
 ## What I'd do with more time
 
-See the closing section of [DECISIONS.md](DECISIONS.md).
+See the end of [DECISIONS.md](DECISIONS.md).

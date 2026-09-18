@@ -1,17 +1,6 @@
-"""
-Fetches the current breed list from the Dog API and stores it as raw JSON.
-
-Design goals (see DECISIONS.md for the reasoning):
-- Idempotent: running this twice on the same day overwrites the same file with
-  the same content, it never appends or duplicates.
-- Raw payload preserved untouched, one dated snapshot per run (partitioned by
-  run date) so we keep a full history on disk / in git.
-- A stable "latest.json" pointer is also written, so downstream tools (dbt)
-  always know exactly where to read the newest data from, without needing to
-  find the newest dated folder themselves.
-- Fails loudly (non-zero exit code) on any problem, and never overwrites good
-  data with a bad/partial response.
-"""
+"""Fetches breeds from the Dog API and stores them as raw JSON: one dated
+snapshot per run, plus a "latest.json" pointer to the newest one. Idempotent,
+and never overwrites good data with a bad/partial response. See DECISIONS.md."""
 
 import json
 import os
@@ -56,10 +45,7 @@ def fetch_breeds() -> list:
 
 
 def validate(data) -> None:
-    """A minimal sanity check so we never save a broken/partial response as if
-    it were good data. If the API changes shape or returns an empty/half
-    response, we want the pipeline to fail here instead of silently shipping
-    bad data downstream."""
+    """Fail here, not downstream, on an empty or malformed response."""
     if not isinstance(data, list) or len(data) == 0:
         raise ValueError("Response is not a non-empty list of breeds")
     first = data[0]

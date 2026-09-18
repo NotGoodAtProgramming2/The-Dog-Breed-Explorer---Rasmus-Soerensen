@@ -1,17 +1,12 @@
-# Kept inside the repo (instead of the usual ~/.dbt/profiles.yml) because it
-# holds no secrets, just local file paths. Run dbt with DBT_PROFILES_DIR=.
-# from inside this folder so it finds this file.
+# In-repo (not ~/.dbt/profiles.yml) since it holds no secrets, just paths.
+# Run dbt with DBT_PROFILES_DIR=. from this folder.
 dog_breeds:
   target: dev
   outputs:
-    # dev: a throwaway database, safe to rebuild anytime, used for local
-    # development and for pull request checks. Not committed to git.
-    dev:
+    dev: # throwaway, rebuilt anytime, used locally and in PR checks
       type: duckdb
       path: ../data/warehouse_dev.duckdb
 
-    # prod: the database the dashboard actually reads from. Rebuilt and
-    # committed by the daily GitHub Actions job.
-    prod:
+    prod: # what the dashboard reads; rebuilt by the daily GitHub Actions job
       type: duckdb
       path: ../data/warehouse.duckdb

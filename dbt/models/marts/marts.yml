@@ -2,10 +2,7 @@ version: 2
 
 models:
   - name: breeds
-    description: >
-      One curated row per dog breed: parsed life span (years) and weight
-      (kg) as numeric min/max/avg, plus a derived size_class. This is the
-      main table the dashboard reads from.
+    description: One curated row per breed. life_span/weight parsed to min/max/avg, plus size_class.
     columns:
       - name: breed_id
         tests:
@@ -22,9 +19,7 @@ models:
                 values: ["Small", "Medium", "Large", "Giant", "Unknown"]
 
   - name: breed_temperaments
-    description: >
-      One row per breed per temperament trait, exploded from the
-      comma-separated temperament list on breeds.
+    description: One row per breed per temperament trait.
     columns:
       - name: breed_id
         tests:

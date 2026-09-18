@@ -1,6 +1,4 @@
--- Turns the comma-separated temperament string on breeds into one row per
--- breed per trait, so temperament can actually be filtered/grouped/counted
--- instead of pattern-matched inside a text blob.
+-- One row per breed per temperament trait, so it can be filtered/grouped.
 
 with split as (
     select

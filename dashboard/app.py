@@ -1,11 +1,5 @@
-"""
-Dog Breed Explorer dashboard.
-
-Reads directly from the curated DuckDB warehouse (data/warehouse.duckdb),
-which the daily pipeline (ingest + dbt) keeps up to date. No extra data
-processing happens here -- the dashboard is a thin, read-only view on top
-of the marts.breeds / marts.breed_temperaments tables.
-"""
+"""Dog Breed Explorer dashboard. Reads data/warehouse.duckdb directly; no
+processing happens here beyond display."""
 
 from pathlib import Path
 
@@ -15,17 +9,12 @@ import pandas as pd
 import streamlit as st
 from scipy import stats
 
-# Editorial theme (matching heyra.ai): warm neutrals + one amber accent,
-# used instead of a blue/orange tech palette. "Other" data recedes in a
-# muted warm gray; the amber accent is reserved for what the chart is
-# actually pointing at (the top breeds, the trend line).
+# Editorial palette (heyra.ai style): amber highlights what matters, gray recedes.
 COLOR_OTHER = "#a9a08c"
 COLOR_TOP = "#c96a1f"
 COLOR_TEXT = "#1a1a1a"
 
-# size_class is ordinal (Small < Medium < Large < Giant), so it gets a
-# single-hue amber ramp light-to-dark rather than arbitrary categorical
-# hues -- the ramp itself encodes the ordering.
+# size_class is ordinal (Small < ... < Giant), so it gets one hue, light to dark.
 SIZE_CLASS_COLORS = {
     "Small": "#f1ddb8",
     "Medium": "#dba24f",
@@ -119,8 +108,7 @@ st.markdown(
 st.markdown('<div class="eyebrow">Heyra Data Platform &middot; Daily Refresh</div>', unsafe_allow_html=True)
 st.title("Dog Breed Explorer")
 st.markdown(
-    '<div class="callout">A curated analytics layer over the Dog API, rebuilt daily: '
-    "raw breed data is cleaned, typed, and parsed into the numbers below.</div>",
+    '<div class="callout">A curated analytics layer over the Dog API, rebuilt daily.</div>',
     unsafe_allow_html=True,
 )
 
@@ -130,13 +118,9 @@ breeds = con.execute("select * from main.breeds").df()
 # --- What the raw data looks like, before any parsing ---
 st.header("The raw data")
 
-# Read straight from the same raw JSON snapshot the pipeline ingests, using
-# an absolute path (resolved from this file's own location) so it works no
-# matter which folder the app is launched from -- unlike a relative path,
-# which would depend on that. This mirrors stg_breeds' field selection
-# (renamed, a few unused columns dropped) but life_span and weight are left
-# exactly as the API returns them: still plain text, not split into
-# min/max/avg numbers.
+# Read the raw JSON directly (an absolute path, so it works from any folder)
+# instead of dbt's stg_breeds view, which only resolves its file path when
+# run from the dbt/ folder. life_span and weight stay as free text here.
 RAW_JSON_PATH = Path(__file__).resolve().parent.parent / "data" / "raw" / "latest.json"
 raw_breeds = duckdb.connect().execute(
     f"""
@@ -189,19 +173,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.caption(
-    f"{len(breeds)} breeds, exactly as returned by the Dog API (only a few always-empty "
-    "columns removed). Life span and weight are still free text at this stage -- the "
-    "parsing into real numbers happens further down the pipeline. Rows shown: the 5 "
-    "lowest ID values, then the single highest, to give a sense of the full range "
-    f"without printing all {len(breeds)} rows."
+    f"{len(breeds)} breeds, as returned by the API (empty columns removed). Life span "
+    "and weight are still free text. Shown: the lowest 5 IDs, then the highest."
 )
 
-# Some breeds are missing life span and/or weight (the source API simply
-# has no data for them), which matters for the size-vs-life-span analysis
-# further down. Show what that excludes, but only when something actually
-# was excluded -- if a future data pull has no missing values at all, this
-# table has nothing useful to say and should just disappear rather than
-# show a row of zeros.
+# Some breeds miss life span and/or weight. Show what that excludes, but
+# only if it excludes anything -- clean future data should hide this table.
 sized = breeds.dropna(subset=["weight_avg_kg", "life_span_avg_years"])
 excluded_either = len(breeds) - len(sized)
 if excluded_either > 0:
@@ -211,7 +188,7 @@ if excluded_either > 0:
         ("Total breeds", f"{len(breeds)}"),
         ("Excluded — missing life span", f"{missing_life}"),
         ("Excluded — missing weight", f"{missing_weight}"),
-        ("Remaining for the size vs. life span analysis", f"{len(sized)}"),
+        ("Remaining sample", f"{len(sized)}"),
     ]
     exclusion_html = "".join(
         f"<tr><td>{label}</td><td>{value}</td></tr>" for label, value in exclusion_rows
@@ -232,8 +209,7 @@ if excluded_either > 0:
 # --- Question 1: which breeds have the longest predicted life span? ---
 st.header("Which breeds have the longest predicted life span?")
 
-# One row per breed, sorted so the lowest life span sits at the left (near
-# the y-axis) and the highest sits at the right (furthest from it).
+# Sorted so lowest life span is near the y-axis, highest is furthest away.
 life_span = (
     breeds.dropna(subset=["life_span_avg_years"])
     .sort_values("life_span_avg_years")
@@ -245,8 +221,7 @@ max_avg = life_span["life_span_avg_years"].max()
 life_span["is_top"] = life_span["life_span_avg_years"] == max_avg
 top_breeds = life_span[life_span["is_top"]].copy().reset_index(drop=True)
 
-# Extra headroom above the highest span, so the stacked top-breed labels
-# (added below) have room to sit inside the chart without overlapping data.
+# Headroom above the highest span, for the stacked labels added below.
 y_domain = [0, life_span["life_span_max_years"].max() + 4]
 y_scale = alt.Scale(domain=y_domain)
 
@@ -290,10 +265,7 @@ points = (
     )
 )
 
-# Name the tied top breeds directly on the chart. They all sit at the same
-# value, so a plain label per point would overlap into unreadable text --
-# instead, stack them in a vertical list anchored to one x position, using
-# the headroom reserved above via y_domain.
+# Tied breeds share a value, so their labels are stacked, not overlapped.
 top_breeds["label_rank"] = top_breeds["rank"].min()
 top_breeds["label_y"] = y_domain[1] - 1.2 * top_breeds.index
 
@@ -315,11 +287,10 @@ st.markdown(
 # --- Question 2: relationship between size and life span ---
 st.header("Is there a relationship between size and life span?")
 
-# `sized` was already computed above, alongside the exclusion table.
+# `sized` is computed above, with the exclusion table.
 
-# Classic linear regression: slope, intercept, correlation (r), and the
-# p-value for the t-test on the slope -- which is the same test as asking
-# "is the correlation significantly different from zero?"
+# Linear regression: slope, intercept, correlation (r), and the p-value
+# for H0: slope = 0 (same test as asking if the correlation is nonzero).
 slope, intercept, r, p_value, stderr = stats.linregress(
     sized["weight_avg_kg"], sized["life_span_avg_years"]
 )
@@ -356,11 +327,9 @@ trend = (
     .encode(x="weight_avg_kg:Q", y="life_span_avg_years:Q")
 )
 
-# Label the trend line with its slope, as a callout box connected to the
-# line by a short pointer -- a plain text label sitting on top of the
-# dashed line and the data points underneath it was unreadable.
+# Slope as a callout box + pointer, not a plain label (which overlapped the line).
 x_min, x_max = sized["weight_avg_kg"].min(), sized["weight_avg_kg"].max()
-x_anchor = x_min + 0.55 * (x_max - x_min)  # middle of the line, away from crowded edges
+x_anchor = x_min + 0.55 * (x_max - x_min)  # mid-line, away from crowded edges
 y_on_line = slope * x_anchor + intercept
 label_y = y_on_line + 2.6
 box_half_width = 0.11 * (x_max - x_min)
@@ -405,17 +374,14 @@ st.altair_chart(
 direction = "negative" if r < 0 else "positive"
 slope_days = abs(slope) * 365
 st.markdown(
-    f"There's a clear {direction} relationship: on average, life span drops by "
-    f"**{abs(slope):.3f} years ({slope_days:.0f} days) for every extra kg** of body weight."
+    f"A clear {direction} relationship: life span drops **{abs(slope):.3f} years "
+    f"({slope_days:.0f} days) per extra kg**, on average."
 )
 
-st.markdown("**Hypothesis test: is this relationship real, or could it be random chance?**")
+st.markdown("**Is this real, or random chance?**")
 st.markdown(
-    "This is a classic Pearson correlation test. The null hypothesis (H0) says there is "
-    "*no* linear relationship between weight and life span (correlation = 0) -- i.e. any "
-    "pattern we see is just random noise in this sample. We test that against the "
-    "alternative (H1: correlation ≠ 0) using a t-test on the slope. If the p-value is "
-    "below 0.05, we reject H0."
+    "A Pearson correlation test. H0: no relationship (correlation = 0). "
+    "H1: there is one. We reject H0 if p < 0.05."
 )
 
 p_mantissa, p_exponent = f"{p_value:.2e}".split("e")
@@ -429,9 +395,7 @@ stats_rows = [
     ("p-value", p_display),
     (
         "Conclusion (α = 0.05)",
-        "Reject H0 — the relationship is statistically significant"
-        if p_value < 0.05
-        else "Fail to reject H0",
+        "Reject H0 — significant" if p_value < 0.05 else "Fail to reject H0",
     ),
 ]
 rows_html = "".join(f"<tr><td>{label}</td><td>{value}</td></tr>" for label, value in stats_rows)
