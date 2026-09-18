@@ -32,28 +32,33 @@ st.markdown(
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&display=swap');
 
+    .block-container { padding-left: 5rem; padding-right: 5rem; max-width: 1300px; }
+
     h1, h2, h3 { font-family: 'Source Serif 4', Georgia, serif !important; }
+    h1 { font-size: 2.75rem !important; }
+    h2 { font-size: 1.7rem !important; }
+    .stMarkdown p, .stMarkdown li, .stCaption { font-size: 1.08rem !important; }
 
     .eyebrow {
         font-family: system-ui, sans-serif;
-        font-size: 0.78rem;
+        font-size: 0.85rem;
         letter-spacing: 0.12em;
         text-transform: uppercase;
         color: #7a7263;
-        margin-bottom: 0.2rem;
+        margin-bottom: 0.3rem;
     }
     .callout {
         border-left: 3px solid #c96a1f;
         background: #efe8d8;
-        padding: 0.9rem 1.1rem;
-        font-size: 1.05rem;
+        padding: 1rem 1.2rem;
+        font-size: 1.15rem;
         color: #1a1a1a;
-        margin-bottom: 1.2rem;
+        margin-bottom: 1.3rem;
     }
-    .stats-table-wrap { display: inline-block; margin: 0.4rem 0 1.3rem 0; }
-    .stats-table { border-collapse: collapse; font-size: 0.95rem; }
+    .stats-table-wrap { display: inline-block; margin: 0.5rem 0 1.4rem 0; }
+    .stats-table { border-collapse: collapse; font-size: 1.05rem; }
     .stats-table th, .stats-table td {
-        padding: 0.5rem 1.3rem;
+        padding: 0.6rem 1.4rem;
         text-align: left;
         white-space: nowrap;
         border-bottom: 1px solid #e1e0d9;
@@ -61,7 +66,7 @@ st.markdown(
     .stats-table th {
         color: #7a7263;
         font-weight: 600;
-        font-size: 0.8rem;
+        font-size: 0.85rem;
         letter-spacing: 0.04em;
         text-transform: uppercase;
         border-bottom: 2px solid #c96a1f;
@@ -73,19 +78,19 @@ st.markdown(
         font-weight: 600;
         white-space: normal;
     }
-    .data-table-wrap { margin: 0.4rem 0 1.3rem 0; overflow-x: auto; }
-    .data-table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+    .data-table-wrap { margin: 0.5rem 0 1.4rem 0; overflow-x: auto; }
+    .data-table { border-collapse: collapse; width: 100%; font-size: 1rem; }
     .data-table th, .data-table td {
-        padding: 0.3rem 0.6rem;
+        padding: 0.4rem 0.7rem;
         text-align: left;
         vertical-align: top;
-        line-height: 1.3;
+        line-height: 1.35;
         border-bottom: 1px solid #e1e0d9;
     }
     .data-table th {
         color: #7a7263;
         font-weight: 600;
-        font-size: 0.72rem;
+        font-size: 0.8rem;
         letter-spacing: 0.04em;
         text-transform: uppercase;
         white-space: nowrap;
@@ -222,7 +227,7 @@ life_span["is_top"] = life_span["life_span_avg_years"] == max_avg
 top_breeds = life_span[life_span["is_top"]].copy().reset_index(drop=True)
 
 # Headroom above the highest span, for the stacked labels added below.
-y_domain = [0, life_span["life_span_max_years"].max() + 4]
+y_domain = [0, life_span["life_span_max_years"].max() + 5.5]
 y_scale = alt.Scale(domain=y_domain)
 
 # A thin line per breed spanning its reported min-to-max life span.
@@ -267,15 +272,18 @@ points = (
 
 # Tied breeds share a value, so their labels are stacked, not overlapped.
 top_breeds["label_rank"] = top_breeds["rank"].min()
-top_breeds["label_y"] = y_domain[1] - 1.2 * top_breeds.index
+top_breeds["label_y"] = y_domain[1] - 1.5 * top_breeds.index
 
 labels = (
     alt.Chart(top_breeds)
-    .mark_text(align="left", dx=6, fontWeight="bold", color=COLOR_TEXT)
+    .mark_text(align="left", dx=8, fontSize=14, fontWeight="bold", color=COLOR_TEXT)
     .encode(x="label_rank:Q", y=alt.Y("label_y:Q", scale=y_scale), text="name")
 )
 
-st.altair_chart((spans + points + labels).properties(height=420), use_container_width=True)
+chart1 = (spans + points + labels).properties(height=460).configure_axis(
+    labelFontSize=13, titleFontSize=15
+)
+st.altair_chart(chart1, use_container_width=True)
 
 top_row = top_breeds.iloc[0]
 st.markdown(
@@ -299,7 +307,7 @@ t_stat = slope / stderr
 
 points = (
     alt.Chart(sized)
-    .mark_circle(size=40, opacity=0.75)
+    .mark_circle(size=55, opacity=0.75)
     .encode(
         x=alt.X("weight_avg_kg:Q", title="Avg. weight (kg)"),
         y=alt.Y("life_span_avg_years:Q", title="Avg. expected life span (years)"),
@@ -332,16 +340,16 @@ x_min, x_max = sized["weight_avg_kg"].min(), sized["weight_avg_kg"].max()
 x_anchor = x_min + 0.55 * (x_max - x_min)  # mid-line, away from crowded edges
 y_on_line = slope * x_anchor + intercept
 label_y = y_on_line + 2.6
-box_half_width = 0.11 * (x_max - x_min)
+box_half_width = 0.13 * (x_max - x_min)
 
 connector = (
-    alt.Chart(pd.DataFrame([{"x": x_anchor, "y0": y_on_line, "y1": label_y - 0.55}]))
+    alt.Chart(pd.DataFrame([{"x": x_anchor, "y0": y_on_line, "y1": label_y - 0.65}]))
     .mark_rule(color=COLOR_TOP, strokeWidth=1.5)
     .encode(x="x:Q", y="y0:Q", y2="y1:Q")
 )
 pin = (
     alt.Chart(pd.DataFrame([{"x": x_anchor, "y": y_on_line}]))
-    .mark_point(filled=True, size=45, color=COLOR_TOP)
+    .mark_point(filled=True, size=55, color=COLOR_TOP)
     .encode(x="x:Q", y="y:Q")
 )
 callout_box = (
@@ -351,8 +359,8 @@ callout_box = (
                 {
                     "x0": x_anchor - box_half_width,
                     "x1": x_anchor + box_half_width,
-                    "y0": label_y - 0.55,
-                    "y1": label_y + 0.55,
+                    "y0": label_y - 0.65,
+                    "y1": label_y + 0.65,
                 }
             ]
         )
@@ -362,14 +370,17 @@ callout_box = (
 )
 slope_label = (
     alt.Chart(pd.DataFrame([{"x": x_anchor, "y": label_y, "text": f"slope: {slope:.3f} years/kg"}]))
-    .mark_text(fontWeight="bold", fontSize=15, color=COLOR_TEXT)
+    .mark_text(fontWeight="bold", fontSize=16, color=COLOR_TEXT)
     .encode(x="x:Q", y="y:Q", text="text")
 )
 
-st.altair_chart(
-    (points + trend + connector + pin + callout_box + slope_label).properties(height=420),
-    use_container_width=True,
+chart2 = (
+    (points + trend + connector + pin + callout_box + slope_label)
+    .properties(height=460)
+    .configure_axis(labelFontSize=13, titleFontSize=15)
+    .configure_legend(labelFontSize=13, titleFontSize=14)
 )
+st.altair_chart(chart2, use_container_width=True)
 
 direction = "negative" if r < 0 else "positive"
 slope_days = abs(slope) * 365
