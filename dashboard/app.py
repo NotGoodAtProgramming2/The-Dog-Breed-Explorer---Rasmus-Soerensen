@@ -84,6 +84,25 @@ st.markdown(
         font-weight: 600;
         white-space: normal;
     }
+    .data-table-wrap { margin: 0.4rem 0 1.3rem 0; overflow-x: auto; }
+    .data-table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+    .data-table th, .data-table td {
+        padding: 0.55rem 0.9rem;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid #e1e0d9;
+    }
+    .data-table th {
+        color: #7a7263;
+        font-weight: 600;
+        font-size: 0.75rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        border-bottom: 2px solid #c96a1f;
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table td.ellipsis { text-align: center; color: #a9a08c; letter-spacing: 0.2em; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -100,23 +119,73 @@ st.markdown(
 con = duckdb.connect(str(DB_PATH), read_only=True)
 breeds = con.execute("select * from main.breeds").df()
 
-# --- What the curated data looks like ---
-st.header("The curated data")
+# --- What the raw data looks like, before any parsing ---
+st.header("The raw data")
 
-preview_source = breeds.assign(_id_num=breeds["breed_id"].astype(int)).sort_values("_id_num")
+# Read straight from the same raw JSON snapshot the pipeline ingests, using
+# an absolute path (resolved from this file's own location) so it works no
+# matter which folder the app is launched from -- unlike a relative path,
+# which would depend on that. This mirrors stg_breeds' field selection
+# (renamed, a few unused columns dropped) but life_span and weight are left
+# exactly as the API returns them: still plain text, not split into
+# min/max/avg numbers.
+RAW_JSON_PATH = Path(__file__).resolve().parent.parent / "data" / "raw" / "latest.json"
+raw_breeds = duckdb.connect().execute(
+    f"""
+    select
+        id::varchar as breed_id,
+        name,
+        breed_group,
+        origin,
+        temperament,
+        life_span,
+        weight.metric as weight_kg_raw
+    from read_json_auto('{RAW_JSON_PATH.as_posix()}')
+    """
+).df()
+
+preview_source = raw_breeds.assign(_id_num=raw_breeds["breed_id"].astype(int)).sort_values("_id_num")
 top5 = preview_source.head(5).drop(columns="_id_num")
 bottom1 = preview_source.tail(1).drop(columns="_id_num")
-ellipsis_row = pd.DataFrame([{col: "…" for col in top5.columns}])
-preview_table = pd.concat([top5, ellipsis_row, bottom1], ignore_index=True)
 
-st.dataframe(preview_table, use_container_width=True, hide_index=True)
+# Human-readable column headers instead of the raw snake_case field names.
+column_titles = {
+    "breed_id": "ID",
+    "name": "Name",
+    "breed_group": "Breed group",
+    "origin": "Origin",
+    "temperament": "Temperament",
+    "life_span": "Life span, raw (years)",
+    "weight_kg_raw": "Weight, raw (kg)",
+}
+
+
+def render_row(row):
+    return "".join(f"<td>{row[col]}</td>" for col in preview_source.columns if col != "_id_num")
+
+
+header_html = "".join(f"<th>{title}</th>" for title in column_titles.values())
+body_html = "".join(f"<tr>{render_row(row)}</tr>" for _, row in top5.iterrows())
+body_html += f'<tr><td class="ellipsis" colspan="{len(column_titles)}">⋯</td></tr>'
+body_html += "".join(f"<tr>{render_row(row)}</tr>" for _, row in bottom1.iterrows())
+
+st.markdown(
+    f"""
+    <div class="data-table-wrap">
+    <table class="data-table">
+        <thead><tr>{header_html}</tr></thead>
+        <tbody>{body_html}</tbody>
+    </table>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 st.caption(
-    f"{len(breeds)} breeds, one row each, after cleaning and parsing. Every breed has an "
-    "identity (name, breed_group, origin, raw temperament text) plus numeric life span "
-    "(years) and weight (kg) ranges parsed out of the source API's free text, and a "
-    "derived size_class. Rows shown: the 5 lowest breed_id values, then the single "
-    "highest, to give a sense of the full range without printing all "
-    f"{len(breeds)} rows."
+    f"{len(breeds)} breeds, exactly as returned by the Dog API (only a few always-empty "
+    "columns removed). Life span and weight are still free text at this stage -- the "
+    "parsing into real numbers happens further down the pipeline. Rows shown: the 5 "
+    "lowest ID values, then the single highest, to give a sense of the full range "
+    f"without printing all {len(breeds)} rows."
 )
 
 # Some breeds are missing life span and/or weight (the source API simply
@@ -179,11 +248,15 @@ spans = (
     .mark_rule(strokeWidth=1.5)
     .encode(
         x=alt.X("rank:Q", axis=None, title="Breeds, sorted by predicted life span"),
-        y=alt.Y("life_span_min_years:Q", title="Life span (years)", scale=y_scale),
+        y=alt.Y("life_span_min_years:Q", title="Expected life span (years)", scale=y_scale),
         y2="life_span_max_years:Q",
         color=alt.condition("datum.is_top", alt.value(COLOR_TOP), alt.value(COLOR_OTHER)),
         opacity=alt.condition("datum.is_top", alt.value(0.9), alt.value(0.3)),
-        tooltip=["name", "life_span_min_years", "life_span_max_years"],
+        tooltip=[
+            alt.Tooltip("name:N", title="Breed"),
+            alt.Tooltip("life_span_min_years:Q", title="Min. expected life span (years)"),
+            alt.Tooltip("life_span_max_years:Q", title="Max. expected life span (years)"),
+        ],
     )
 )
 
@@ -202,7 +275,10 @@ points = (
         y=alt.Y("years:Q", scale=y_scale),
         color=alt.condition("datum.is_top", alt.value(COLOR_TOP), alt.value(COLOR_OTHER)),
         opacity=alt.condition("datum.is_top", alt.value(0.9), alt.value(0.3)),
-        tooltip=["name", "years"],
+        tooltip=[
+            alt.Tooltip("name:N", title="Breed"),
+            alt.Tooltip("years:Q", title="Expected life span (years)"),
+        ],
     )
 )
 
@@ -246,8 +322,8 @@ points = (
     alt.Chart(sized)
     .mark_circle(size=40, opacity=0.75)
     .encode(
-        x=alt.X("weight_avg_kg:Q", title="Average weight (kg)"),
-        y=alt.Y("life_span_avg_years:Q", title="Average life span (years)"),
+        x=alt.X("weight_avg_kg:Q", title="Avg. weight (kg)"),
+        y=alt.Y("life_span_avg_years:Q", title="Avg. expected life span (years)"),
         color=alt.Color(
             "size_class:N",
             title="Size class",
@@ -256,7 +332,12 @@ points = (
                 range=list(SIZE_CLASS_COLORS.values()),
             ),
         ),
-        tooltip=["name", "weight_avg_kg", "life_span_avg_years", "size_class"],
+        tooltip=[
+            alt.Tooltip("name:N", title="Breed"),
+            alt.Tooltip("weight_avg_kg:Q", title="Avg. weight (kg)"),
+            alt.Tooltip("life_span_avg_years:Q", title="Avg. expected life span (years)"),
+            alt.Tooltip("size_class:N", title="Size class"),
+        ],
     )
 )
 
