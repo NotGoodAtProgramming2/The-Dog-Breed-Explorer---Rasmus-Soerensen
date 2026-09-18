@@ -296,12 +296,15 @@ st.markdown(
     "below 0.05, we reject H0."
 )
 
+p_mantissa, p_exponent = f"{p_value:.2e}".split("e")
+p_display = f"{p_mantissa} × 10<sup>{int(p_exponent)}</sup> ≈ 0.00"
+
 stats_rows = [
     ("Correlation (r)", f"{r:.3f}"),
     ("Sample size (n)", f"{n}"),
     ("Slope (years/kg)", f"{slope:.4f}"),
     ("t-statistic", f"{t_stat:.2f}"),
-    ("p-value", f"{p_value:.2e}"),
+    ("p-value", p_display),
     (
         "Conclusion (α = 0.05)",
         "Reject H0 — the relationship is statistically significant"
