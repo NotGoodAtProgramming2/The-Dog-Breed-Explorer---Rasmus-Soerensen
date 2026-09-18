@@ -364,7 +364,7 @@ def render_browse():
 
     st.title("Discover breeds")
 
-    f1, f2, f3, f4, f5 = st.columns([2, 2, 2, 2, 1])
+    f1, f2, f3, f4, f5 = st.columns([2, 2, 2, 2, 2.2])
     search = f1.text_input("Search", value=st.session_state.search)
     groups = f2.multiselect("Breed group", sorted(breeds["breed_group"].dropna().unique()),
                              default=st.session_state.group_filter)
@@ -373,7 +373,16 @@ def render_browse():
         "Temperament", [f"{t.capitalize()} ({c})" for t, c in top_traits.items()]
     )
     selected_traits = [s.rsplit(" (", 1)[0].lower() for s in selected_traits]
-    sort_by = f5.selectbox("Sort by", ["Name", "Longest life span", "Heaviest"])
+    sort_by = f5.selectbox(
+        "Sort by",
+        [
+            "Alphabetical",
+            "Life span: high → low",
+            "Life span: low → high",
+            "Weight: high → low",
+            "Weight: low → high",
+        ],
+    )
 
     filtered = breeds
     if search:
@@ -388,10 +397,14 @@ def render_browse():
         ].unique()
         filtered = filtered[filtered["breed_id"].isin(matching_ids)]
 
-    if sort_by == "Longest life span":
+    if sort_by == "Life span: high → low":
         filtered = filtered.sort_values("life_span_avg_years", ascending=False)
-    elif sort_by == "Heaviest":
+    elif sort_by == "Life span: low → high":
+        filtered = filtered.sort_values("life_span_avg_years", ascending=True)
+    elif sort_by == "Weight: high → low":
         filtered = filtered.sort_values("weight_avg_kg", ascending=False)
+    elif sort_by == "Weight: low → high":
+        filtered = filtered.sort_values("weight_avg_kg", ascending=True)
     else:
         filtered = filtered.sort_values("name")
 
