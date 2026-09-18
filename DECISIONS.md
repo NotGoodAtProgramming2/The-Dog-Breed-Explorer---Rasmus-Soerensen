@@ -25,7 +25,9 @@
    - `life_span` → `life_span_min_years` / `max` / `avg`
    - `weight_metric_raw` → `weight_min_kg` / `max` / `avg`
    - `weight_avg_kg` → derived `size_class`
-   - `temperament` → exploded into `breed_temperaments`, one row per trait
+   - `temperament` → exploded into `breed_temperaments`, one row per trait, lowercased (the
+     source capitalizes only the first trait in each breed's list, e.g. "Alert" vs "alert" —
+     same trait, not two)
    - This is what the dashboard reads.
 
 ## Transformation — dbt
