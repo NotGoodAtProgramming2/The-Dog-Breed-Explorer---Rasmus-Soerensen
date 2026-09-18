@@ -212,18 +212,51 @@ trend = (
     .encode(x="weight_avg_kg:Q", y="life_span_avg_years:Q")
 )
 
-# Label the trend line with its slope, placed at its right-hand end.
-x_max = sized["weight_avg_kg"].max()
-slope_label = pd.DataFrame(
-    [{"x": x_max, "y": slope * x_max + intercept, "text": f"slope: {slope:.3f} years/kg"}]
+# Label the trend line with its slope, as a callout box connected to the
+# line by a short pointer -- a plain text label sitting on top of the
+# dashed line and the data points underneath it was unreadable.
+x_min, x_max = sized["weight_avg_kg"].min(), sized["weight_avg_kg"].max()
+x_anchor = x_min + 0.55 * (x_max - x_min)  # middle of the line, away from crowded edges
+y_on_line = slope * x_anchor + intercept
+label_y = y_on_line + 2.6
+box_half_width = 0.11 * (x_max - x_min)
+
+connector = (
+    alt.Chart(pd.DataFrame([{"x": x_anchor, "y0": y_on_line, "y1": label_y - 0.55}]))
+    .mark_rule(color=COLOR_TOP, strokeWidth=1.5)
+    .encode(x="x:Q", y="y0:Q", y2="y1:Q")
 )
-trend_label = (
-    alt.Chart(slope_label)
-    .mark_text(align="right", dy=-8, fontWeight="bold", color=COLOR_TEXT)
+pin = (
+    alt.Chart(pd.DataFrame([{"x": x_anchor, "y": y_on_line}]))
+    .mark_point(filled=True, size=45, color=COLOR_TOP)
+    .encode(x="x:Q", y="y:Q")
+)
+callout_box = (
+    alt.Chart(
+        pd.DataFrame(
+            [
+                {
+                    "x0": x_anchor - box_half_width,
+                    "x1": x_anchor + box_half_width,
+                    "y0": label_y - 0.55,
+                    "y1": label_y + 0.55,
+                }
+            ]
+        )
+    )
+    .mark_rect(color="#efe8d8", stroke=COLOR_TOP, strokeWidth=1.2, cornerRadius=4)
+    .encode(x="x0:Q", x2="x1:Q", y="y0:Q", y2="y1:Q")
+)
+slope_label = (
+    alt.Chart(pd.DataFrame([{"x": x_anchor, "y": label_y, "text": f"slope: {slope:.3f} years/kg"}]))
+    .mark_text(fontWeight="bold", fontSize=15, color=COLOR_TEXT)
     .encode(x="x:Q", y="y:Q", text="text")
 )
 
-st.altair_chart((points + trend + trend_label).properties(height=420), use_container_width=True)
+st.altair_chart(
+    (points + trend + connector + pin + callout_box + slope_label).properties(height=420),
+    use_container_width=True,
+)
 
 direction = "negative" if r < 0 else "positive"
 st.markdown(
