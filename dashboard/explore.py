@@ -4,11 +4,32 @@ different audience: this one is for exploring breeds, not analyzing them."""
 
 from pathlib import Path
 
+import altair as alt
 import duckdb
+import pandas as pd
+import plotly.express as px
 import streamlit as st
+from scipy import stats
 
 COLOR_ACCENT = "#c96a1f"
 COLOR_TEXT = "#1a1a1a"
+PAGE_SIZE = 24
+
+# A few common non-ISO origin names, so more of the map actually resolves.
+COUNTRY_ALIASES = {
+    "England": "United Kingdom",
+    "Scotland": "United Kingdom",
+    "Wales": "United Kingdom",
+    "Northern Ireland": "United Kingdom",
+    "Tibet": "China",
+}
+
+
+def extract_country(origin: str) -> str:
+    """origin is free text, e.g. "Gascony, France" -- take the last part."""
+    country = origin.split(",")[-1].strip()
+    return COUNTRY_ALIASES.get(country, country)
+
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "warehouse.duckdb"
 
@@ -46,6 +67,11 @@ st.markdown(
     }
     .group-tile .count { color: #7a7263; font-size: 0.78rem; }
 
+    .mini-card {
+        border: 1px solid #e1e0d9; border-radius: 12px; background: #fff;
+        padding: 1rem; height: 100%;
+    }
+
     .breed-card {
         border: 1px solid #e1e0d9; border-radius: 12px; overflow: hidden;
         margin-bottom: 1.2rem; background: #fff;
@@ -59,6 +85,7 @@ st.markdown(
         border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.78rem;
         margin: 0 0.25rem 0.25rem 0;
     }
+    .trait-check label p { font-size: 0.85rem !important; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -66,19 +93,20 @@ st.markdown(
 
 con = duckdb.connect(str(DB_PATH), read_only=True)
 breeds = con.execute("select * from main.breeds").df()
+temperaments_all = con.execute("select * from main.breed_temperaments").df()
+top_traits = temperaments_all["temperament"].value_counts().head(8)
 
-if "view" not in st.session_state:
-    st.session_state.view = "home"
-if "search" not in st.session_state:
-    st.session_state.search = ""
-if "group_filter" not in st.session_state:
-    st.session_state.group_filter = []
+for key, default in [("view", "home"), ("search", ""), ("group_filter", []),
+                      ("page", 1), ("filter_key", None)]:
+    if key not in st.session_state:
+        st.session_state[key] = default
 
 
 def go_browse(search="", group=None):
     st.session_state.view = "browse"
     st.session_state.search = search
     st.session_state.group_filter = [group] if group else []
+    st.session_state.page = 1
 
 
 # ---------------------------------------------------------------- HOME ----
@@ -113,7 +141,7 @@ def render_home():
 
     st.write("")
     n_groups = breeds["breed_group"].nunique()
-    n_traits = con.execute("select count(distinct temperament) from main.breed_temperaments").fetchone()[0]
+    n_traits = temperaments_all["temperament"].nunique()
     stat_cols = st.columns(3)
     for col, (n, label) in zip(
         stat_cols,
@@ -139,6 +167,71 @@ def render_home():
                 go_browse(group=group)
                 st.rerun()
 
+    st.header("Explore the data")
+    map_col, cloud_col, scatter_col = st.columns(3)
+    render_origin_map(map_col)
+    render_temperament_cloud(cloud_col)
+    render_size_vs_life_span(scatter_col)
+
+
+def render_origin_map(col):
+    with col:
+        st.markdown('<div class="mini-card"><b>Where dogs come from</b><br>', unsafe_allow_html=True)
+        counts = (
+            breeds.assign(country=breeds["origin"].map(extract_country))
+            .groupby("country").size().reset_index(name="count")
+        )
+        fig = px.choropleth(
+            counts, locations="country", locationmode="country names", color="count",
+            color_continuous_scale=["#f1ddb8", "#c96a1f", "#5c3a1e"],
+        )
+        fig.update_layout(
+            margin=dict(l=0, r=0, t=10, b=0), height=260, coloraxis_showscale=False,
+            geo=dict(bgcolor="rgba(0,0,0,0)", showframe=False),
+            paper_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_temperament_cloud(col):
+    with col:
+        st.markdown('<div class="mini-card"><b>Common temperament</b><br><br>', unsafe_allow_html=True)
+        counts = temperaments_all["temperament"].value_counts().head(18)
+        lo, hi = counts.min(), counts.max()
+        palette = ["#c96a1f", "#7a4a1f", "#3a6a5c", "#a03d3d", "#4a3aa7", "#1a1a1a", "#b3691f", "#2a6a4a"]
+        spans = []
+        for i, (trait, count) in enumerate(counts.items()):
+            size = 13 + 22 * ((count - lo) / max(1, hi - lo))
+            spans.append(
+                f'<span style="font-size:{size:.0f}px;color:{palette[i % len(palette)]};'
+                f'font-weight:700;margin:0 8px;line-height:1.9;white-space:nowrap;'
+                f'flex-shrink:0;">{trait.capitalize()}</span>'
+            )
+        st.markdown(
+            f'<div style="display:flex;flex-wrap:wrap;justify-content:center;">{"".join(spans)}</div></div>',
+            unsafe_allow_html=True,
+        )
+
+
+def render_size_vs_life_span(col):
+    with col:
+        st.markdown('<div class="mini-card"><b>Size vs. life span</b><br>', unsafe_allow_html=True)
+        sized = breeds.dropna(subset=["weight_avg_kg", "life_span_avg_years"])
+        slope, intercept, r, p_value, stderr = stats.linregress(
+            sized["weight_avg_kg"], sized["life_span_avg_years"]
+        )
+        points = alt.Chart(sized).mark_circle(size=25, opacity=0.6, color=COLOR_ACCENT).encode(
+            x=alt.X("weight_avg_kg:Q", title="Weight (kg)"),
+            y=alt.Y("life_span_avg_years:Q", title="Life span (yrs)"),
+        )
+        trend = alt.Chart(sized).transform_regression(
+            "weight_avg_kg", "life_span_avg_years"
+        ).mark_line(color=COLOR_TEXT, strokeDash=[4, 3]).encode(x="weight_avg_kg:Q", y="life_span_avg_years:Q")
+        st.altair_chart((points + trend).properties(height=230), use_container_width=True)
+        st.caption(f"Correlation: {r:.2f} -- bigger dogs tend to live shorter lives.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
 
 # -------------------------------------------------------------- BROWSE ----
 def render_browse():
@@ -155,6 +248,16 @@ def render_browse():
     sizes = f3.multiselect("Size class", ["Small", "Medium", "Large", "Giant"])
     sort_by = f4.selectbox("Sort by", ["Name", "Longest life span", "Heaviest"])
 
+    st.markdown("**Temperament** (select multiple)")
+    trait_cols = st.columns(len(top_traits))
+    selected_traits = []
+    for c, (trait, count) in zip(trait_cols, top_traits.items()):
+        with c:
+            st.markdown('<div class="trait-check">', unsafe_allow_html=True)
+            if st.checkbox(f"{trait.capitalize()} ({count})", key=f"trait_{trait}"):
+                selected_traits.append(trait)
+            st.markdown("</div>", unsafe_allow_html=True)
+
     filtered = breeds
     if search:
         filtered = filtered[filtered["name"].str.contains(search, case=False, na=False)]
@@ -162,6 +265,11 @@ def render_browse():
         filtered = filtered[filtered["breed_group"].isin(groups)]
     if sizes:
         filtered = filtered[filtered["size_class"].isin(sizes)]
+    if selected_traits:
+        matching_ids = temperaments_all.loc[
+            temperaments_all["temperament"].isin(selected_traits), "breed_id"
+        ].unique()
+        filtered = filtered[filtered["breed_id"].isin(matching_ids)]
 
     if sort_by == "Longest life span":
         filtered = filtered.sort_values("life_span_avg_years", ascending=False)
@@ -170,19 +278,25 @@ def render_browse():
     else:
         filtered = filtered.sort_values("name")
 
+    # Reset to page 1 whenever the filters/sort actually change.
+    filter_key = (search, tuple(groups), tuple(sizes), tuple(sorted(selected_traits)), sort_by)
+    if filter_key != st.session_state.filter_key:
+        st.session_state.filter_key = filter_key
+        st.session_state.page = 1
+
     st.caption(f"{len(filtered)} breeds match your filters.")
 
-    limit = st.slider("Breeds to show", 8, 96, 24, step=8)
-    shown = filtered.head(limit)
-
-    temperaments = con.execute("select * from main.breed_temperaments").df()
+    total_pages = max(1, -(-len(filtered) // PAGE_SIZE))
+    st.session_state.page = min(st.session_state.page, total_pages)
+    page = st.session_state.page
+    shown = filtered.iloc[(page - 1) * PAGE_SIZE : page * PAGE_SIZE]
 
     cols = st.columns(4)
     for i, (_, breed) in enumerate(shown.iterrows()):
-        traits = temperaments.loc[temperaments["breed_id"] == breed["breed_id"], "temperament"].head(3)
-        chips = "".join(f'<span class="chip">{t}</span>' for t in traits)
-        life = "?" if pd_isna(breed["life_span_min_years"]) else f'{breed["life_span_min_years"]:.0f}-{breed["life_span_max_years"]:.0f} yrs'
-        weight = "?" if pd_isna(breed["weight_min_kg"]) else f'{breed["weight_min_kg"]:.0f}-{breed["weight_max_kg"]:.0f} kg'
+        traits = temperaments_all.loc[temperaments_all["breed_id"] == breed["breed_id"], "temperament"].head(3)
+        chips = "".join(f'<span class="chip">{t.capitalize()}</span>' for t in traits)
+        life = "?" if pd.isna(breed["life_span_min_years"]) else f'{breed["life_span_min_years"]:.0f}-{breed["life_span_max_years"]:.0f} yrs'
+        weight = "?" if pd.isna(breed["weight_min_kg"]) else f'{breed["weight_min_kg"]:.0f}-{breed["weight_max_kg"]:.0f} kg'
         with cols[i % 4]:
             st.markdown(
                 f"""
@@ -198,9 +312,38 @@ def render_browse():
                 unsafe_allow_html=True,
             )
 
+    render_pagination(total_pages, page)
 
-def pd_isna(value):
-    return value is None or value != value  # NaN check without importing pandas here
+
+def render_pagination(total_pages: int, current: int):
+    if total_pages <= 1:
+        return
+    window = 2
+    nearby = range(max(1, current - window), min(total_pages, current + window) + 1)
+    tokens = sorted(set([1, total_pages, *nearby]))
+
+    # +2 for Prev/Next, +2 more for the (at most two) "…" gaps between tokens.
+    cols = st.columns(len(tokens) + 4)
+    if cols[0].button("‹ Prev", disabled=current == 1):
+        st.session_state.page = current - 1
+        st.rerun()
+
+    col_i = 1
+    prev_token = None
+    for token in tokens:
+        if prev_token is not None and token - prev_token > 1:
+            cols[col_i].markdown("…")
+            col_i += 1
+        is_current = token == current
+        if cols[col_i].button(str(token), key=f"page_{token}", type="primary" if is_current else "secondary"):
+            st.session_state.page = token
+            st.rerun()
+        col_i += 1
+        prev_token = token
+
+    if cols[col_i].button("Next ›", disabled=current == total_pages):
+        st.session_state.page = current + 1
+        st.rerun()
 
 
 if st.session_state.view == "home":
