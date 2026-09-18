@@ -200,6 +200,36 @@ st.header("Is there a relationship between size and life span?")
 
 sized = breeds.dropna(subset=["weight_avg_kg", "life_span_avg_years"])
 
+# Not every breed necessarily has both values -- show what got excluded and
+# why, but only when something actually was excluded. If a future data pull
+# has no missing values at all, this table has nothing useful to say and
+# should just disappear rather than show a row of zeros.
+excluded_either = len(breeds) - len(sized)
+if excluded_either > 0:
+    missing_life = int(breeds["life_span_avg_years"].isna().sum())
+    missing_weight = int(breeds["weight_avg_kg"].isna().sum())
+    exclusion_rows = [
+        ("Total breeds", f"{len(breeds)}"),
+        ("Excluded — missing life span", f"{missing_life}"),
+        ("Excluded — missing weight", f"{missing_weight}"),
+        ("Remaining in sample", f"{len(sized)}"),
+    ]
+    exclusion_html = "".join(
+        f"<tr><td>{label}</td><td>{value}</td></tr>" for label, value in exclusion_rows
+    )
+    st.markdown("Not every breed has both values, so a few are excluded below:")
+    st.markdown(
+        f"""
+        <div class="stats-table-wrap">
+        <table class="stats-table">
+            <thead><tr><th>Sample size</th><th>Count</th></tr></thead>
+            <tbody>{exclusion_html}</tbody>
+        </table>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # Classic linear regression: slope, intercept, correlation (r), and the
 # p-value for the t-test on the slope -- which is the same test as asking
 # "is the correlation significantly different from zero?"
