@@ -61,6 +61,29 @@ st.markdown(
         color: #1a1a1a;
         margin-bottom: 1.2rem;
     }
+    .stats-table-wrap { display: inline-block; margin: 0.4rem 0 1.3rem 0; }
+    .stats-table { border-collapse: collapse; font-size: 0.95rem; }
+    .stats-table th, .stats-table td {
+        padding: 0.5rem 1.3rem;
+        text-align: left;
+        white-space: nowrap;
+        border-bottom: 1px solid #e1e0d9;
+    }
+    .stats-table th {
+        color: #7a7263;
+        font-weight: 600;
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        border-bottom: 2px solid #c96a1f;
+    }
+    .stats-table td:first-child { color: #52514e; }
+    .stats-table td:last-child { font-family: system-ui, sans-serif; color: #1a1a1a; }
+    .stats-table tr:last-child td {
+        border-bottom: none;
+        font-weight: 600;
+        white-space: normal;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -184,7 +207,6 @@ slope, intercept, r, p_value, stderr = stats.linregress(
     sized["weight_avg_kg"], sized["life_span_avg_years"]
 )
 n = len(sized)
-dof = n - 2
 t_stat = slope / stderr
 
 points = (
@@ -259,9 +281,10 @@ st.altair_chart(
 )
 
 direction = "negative" if r < 0 else "positive"
+slope_days = abs(slope) * 365
 st.markdown(
     f"There's a clear {direction} relationship: on average, life span drops by "
-    f"**{abs(slope):.3f} years for every extra kg** of body weight."
+    f"**{abs(slope):.3f} years ({slope_days:.0f} days) for every extra kg** of body weight."
 )
 
 st.markdown("**Hypothesis test: is this relationship real, or could it be random chance?**")
@@ -273,28 +296,28 @@ st.markdown(
     "below 0.05, we reject H0."
 )
 
-stats_table = pd.DataFrame(
-    {
-        "Statistic": [
-            "Correlation (r)",
-            "Sample size (n)",
-            "Slope (years/kg)",
-            "t-statistic",
-            "Degrees of freedom",
-            "p-value",
-            "Conclusion (α = 0.05)",
-        ],
-        "Value": [
-            f"{r:.3f}",
-            f"{n}",
-            f"{slope:.4f}",
-            f"{t_stat:.2f}",
-            f"{dof}",
-            f"{p_value:.2e}",
-            "Reject H0 -- the relationship is statistically significant"
-            if p_value < 0.05
-            else "Fail to reject H0",
-        ],
-    }
+stats_rows = [
+    ("Correlation (r)", f"{r:.3f}"),
+    ("Sample size (n)", f"{n}"),
+    ("Slope (years/kg)", f"{slope:.4f}"),
+    ("t-statistic", f"{t_stat:.2f}"),
+    ("p-value", f"{p_value:.2e}"),
+    (
+        "Conclusion (α = 0.05)",
+        "Reject H0 — the relationship is statistically significant"
+        if p_value < 0.05
+        else "Fail to reject H0",
+    ),
+]
+rows_html = "".join(f"<tr><td>{label}</td><td>{value}</td></tr>" for label, value in stats_rows)
+st.markdown(
+    f"""
+    <div class="stats-table-wrap">
+    <table class="stats-table">
+        <thead><tr><th>Statistic</th><th>Value</th></tr></thead>
+        <tbody>{rows_html}</tbody>
+    </table>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
-st.table(stats_table.set_index("Statistic"))
