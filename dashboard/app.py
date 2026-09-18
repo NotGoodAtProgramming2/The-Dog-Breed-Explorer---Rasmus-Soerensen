@@ -85,24 +85,32 @@ st.markdown(
         white-space: normal;
     }
     .data-table-wrap { margin: 0.4rem 0 1.3rem 0; overflow-x: auto; }
-    .data-table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+    .data-table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
     .data-table th, .data-table td {
-        padding: 0.55rem 0.9rem;
+        padding: 0.3rem 0.6rem;
         text-align: left;
         vertical-align: top;
+        line-height: 1.3;
         border-bottom: 1px solid #e1e0d9;
     }
     .data-table th {
         color: #7a7263;
         font-weight: 600;
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         letter-spacing: 0.04em;
         text-transform: uppercase;
         white-space: nowrap;
         border-bottom: 2px solid #c96a1f;
     }
     .data-table tr:last-child td { border-bottom: none; }
-    .data-table td.ellipsis { text-align: center; color: #a9a08c; letter-spacing: 0.2em; }
+    .data-table td.ellipsis {
+        text-align: center;
+        color: #c96a1f;
+        font-weight: 700;
+        font-size: 1.2rem;
+        letter-spacing: 0.4em;
+        padding: 0.15rem 0.6rem;
+    }
     </style>
     """,
     unsafe_allow_html=True,
