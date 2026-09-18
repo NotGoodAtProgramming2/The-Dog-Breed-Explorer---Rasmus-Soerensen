@@ -18,7 +18,9 @@ dashboard/app.py (Streamlit) → charts, read straight from the warehouse
   One dated folder per day, plus a `latest.json` pointer to the newest.
 - **Curated**: dbt reads `latest.json`, parses the messy text, writes clean tables into
   `data/warehouse.duckdb`.
-- **Dashboard**: a Streamlit app queries that same file directly.
+- **Two apps**: `dashboard/app.py` (analytics, answers the case's questions) and
+  `dashboard/explore.py` (a consumer-facing browse/search UI with breed photos). Both query
+  the same warehouse file directly.
 - **Automation**: one GitHub Actions workflow runs the whole chain daily at 02:00 UTC, on
   every pull request, and on demand. Non-PR runs commit the refreshed data back.
 
@@ -37,14 +39,15 @@ cd dbt
 DBT_PROFILES_DIR=. dbt build --target prod
 cd ..
 
-streamlit run dashboard/app.py
+streamlit run dashboard/app.py       # analytics dashboard
+streamlit run dashboard/explore.py   # browse/discover UI
 ```
 
 ## The curated model
 
 - `stg_breeds`: one row per breed, renamed fields, still raw text.
-- `breeds`: the main table — `life_span`/`weight` parsed into numeric min/max/avg, plus a
-  derived `size_class` (Small/Medium/Large/Giant).
+- `breeds`: the main table — `life_span`/`weight` parsed into numeric min/max/avg, a derived
+  `size_class` (Small/Medium/Large/Giant), and an `image_url` for the explore UI.
 - `breed_temperaments`: the comma-separated `temperament` list exploded to one row per trait.
 
 6 dbt tests: structural correctness (uniqueness, not-null, valid `size_class`, referential
