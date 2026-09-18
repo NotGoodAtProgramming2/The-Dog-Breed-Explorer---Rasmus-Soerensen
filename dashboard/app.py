@@ -119,6 +119,39 @@ st.caption(
     f"{len(breeds)} rows."
 )
 
+# Some breeds are missing life span and/or weight (the source API simply
+# has no data for them), which matters for the size-vs-life-span analysis
+# further down. Show what that excludes, but only when something actually
+# was excluded -- if a future data pull has no missing values at all, this
+# table has nothing useful to say and should just disappear rather than
+# show a row of zeros.
+sized = breeds.dropna(subset=["weight_avg_kg", "life_span_avg_years"])
+excluded_either = len(breeds) - len(sized)
+if excluded_either > 0:
+    missing_life = int(breeds["life_span_avg_years"].isna().sum())
+    missing_weight = int(breeds["weight_avg_kg"].isna().sum())
+    exclusion_rows = [
+        ("Total breeds", f"{len(breeds)}"),
+        ("Excluded — missing life span", f"{missing_life}"),
+        ("Excluded — missing weight", f"{missing_weight}"),
+        ("Remaining for the size vs. life span analysis", f"{len(sized)}"),
+    ]
+    exclusion_html = "".join(
+        f"<tr><td>{label}</td><td>{value}</td></tr>" for label, value in exclusion_rows
+    )
+    st.markdown("Not every breed has both values, so a few are excluded below:")
+    st.markdown(
+        f"""
+        <div class="stats-table-wrap">
+        <table class="stats-table">
+            <thead><tr><th>Sample size</th><th>Count</th></tr></thead>
+            <tbody>{exclusion_html}</tbody>
+        </table>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # --- Question 1: which breeds have the longest predicted life span? ---
 st.header("Which breeds have the longest predicted life span?")
 
@@ -198,37 +231,7 @@ st.markdown(
 # --- Question 2: relationship between size and life span ---
 st.header("Is there a relationship between size and life span?")
 
-sized = breeds.dropna(subset=["weight_avg_kg", "life_span_avg_years"])
-
-# Not every breed necessarily has both values -- show what got excluded and
-# why, but only when something actually was excluded. If a future data pull
-# has no missing values at all, this table has nothing useful to say and
-# should just disappear rather than show a row of zeros.
-excluded_either = len(breeds) - len(sized)
-if excluded_either > 0:
-    missing_life = int(breeds["life_span_avg_years"].isna().sum())
-    missing_weight = int(breeds["weight_avg_kg"].isna().sum())
-    exclusion_rows = [
-        ("Total breeds", f"{len(breeds)}"),
-        ("Excluded — missing life span", f"{missing_life}"),
-        ("Excluded — missing weight", f"{missing_weight}"),
-        ("Remaining in sample", f"{len(sized)}"),
-    ]
-    exclusion_html = "".join(
-        f"<tr><td>{label}</td><td>{value}</td></tr>" for label, value in exclusion_rows
-    )
-    st.markdown("Not every breed has both values, so a few are excluded below:")
-    st.markdown(
-        f"""
-        <div class="stats-table-wrap">
-        <table class="stats-table">
-            <thead><tr><th>Sample size</th><th>Count</th></tr></thead>
-            <tbody>{exclusion_html}</tbody>
-        </table>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+# `sized` was already computed above, alongside the exclusion table.
 
 # Classic linear regression: slope, intercept, correlation (r), and the
 # p-value for the t-test on the slope -- which is the same test as asking
