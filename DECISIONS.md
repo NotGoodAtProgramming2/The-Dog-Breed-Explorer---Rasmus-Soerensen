@@ -62,4 +62,7 @@
 - Delete old raw data snapshots after a while, instead of keeping every day forever.
 - Put the auto-generated docs online (GitHub Pages), not just locally.
 - Add an alert for the 2 breeds where weight data is missing/unknown.
+- Split male/female weight and height instead of merging them into one
+  overall min-max range per breed — could reveal a sex-based pattern that's
+  currently hidden (e.g. does the male/female size gap differ by breed group?).
 - Try one of the bonus ideas — e.g. AI-based temperament scoring.
