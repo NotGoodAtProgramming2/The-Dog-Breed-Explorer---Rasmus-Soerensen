@@ -230,12 +230,24 @@ st.markdown(
     }
     .breed-card img { width: 100%; height: 170px; object-fit: cover; }
     .breed-card .body { padding: 0.8rem 1rem; }
+    .breed-card .name, .breed-card .meta, .breed-card .chips {
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
     .breed-card .name { font-weight: 700; font-size: 1.05rem; }
     .breed-card .meta { color: #7a7263; font-size: 0.85rem; margin-bottom: 0.4rem; }
+    .breed-card .chips { min-height: 1.9rem; }
     .chip {
         display: inline-block; background: #efe8d8; color: #7a4a1f;
         border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.78rem;
         margin: 0 0.25rem 0.25rem 0;
+    }
+
+    /* Pagination: shrink each column to its button and center the row. */
+    [class*="st-key-pager_"] [data-testid="stHorizontalBlock"] {
+        justify-content: center; gap: 0.4rem; flex-wrap: nowrap;
+    }
+    [class*="st-key-pager_"] [data-testid="stColumn"] {
+        flex: 0 0 auto !important; width: auto !important; min-width: 0 !important;
     }
     </style>
     """,
@@ -260,6 +272,28 @@ def go_browse(search="", group=None):
 
 
 # ------------------------------------------------------------ BREED GRID --
+CHIP_BUDGET = 42  # character budget for one line of chips (measured across all 27 pages)
+CHIP_OVERHEAD = 4.7  # each chip's padding/margin, in character widths
+
+
+def fit_chips(traits) -> list:
+    """Chips that fit on one line, so every card has the same height. A trait
+    that doesn't fully fit is shortened and ends in "-" (e.g. "Work-fo-")."""
+    fitted, used = [], 0.0
+    for trait in traits:
+        word = trait.capitalize()
+        if used + len(word) + CHIP_OVERHEAD <= CHIP_BUDGET:
+            fitted.append(word)
+            used += len(word) + CHIP_OVERHEAD
+            continue
+        room = int(CHIP_BUDGET - used - CHIP_OVERHEAD)
+        if room >= 4:
+            cut = word[: room - 1]
+            fitted.append(cut if cut.endswith("-") else cut + "-")
+        break
+    return fitted
+
+
 def render_breed_grid(df: pd.DataFrame, key_prefix: str):
     """Paginated card grid, shared by the browse view and trait pages."""
     page_key = f"{key_prefix}_page"
@@ -274,7 +308,7 @@ def render_breed_grid(df: pd.DataFrame, key_prefix: str):
     cols = st.columns(4)
     for i, (_, breed) in enumerate(shown.iterrows()):
         traits = temperaments_all.loc[temperaments_all["breed_id"] == breed["breed_id"], "temperament"].head(3)
-        chips = "".join(f'<span class="chip">{t.capitalize()}</span>' for t in traits)
+        chips = "".join(f'<span class="chip">{t}</span>' for t in fit_chips(traits))
         life = "?" if pd.isna(breed["life_span_min_years"]) else f'{breed["life_span_min_years"]:.0f}-{breed["life_span_max_years"]:.0f} yrs'
         weight = "?" if pd.isna(breed["weight_min_kg"]) else f'{breed["weight_min_kg"]:.0f}-{breed["weight_max_kg"]:.0f} kg'
         with cols[i % 4]:
@@ -283,9 +317,9 @@ def render_breed_grid(df: pd.DataFrame, key_prefix: str):
                 <div class="breed-card">
                     <img src="{breed['image_url']}">
                     <div class="body">
-                        <div class="name">{breed['name']}</div>
+                        <div class="name" title="{breed['name']}">{breed['name']}</div>
                         <div class="meta">{breed['breed_group'] or 'Unknown group'} &middot; {life} &middot; {weight}</div>
-                        {chips}
+                        <div class="chips">{chips}</div>
                     </div>
                 </div>
                 """,
@@ -301,33 +335,35 @@ def render_pagination(total_pages: int, current: int, page_key: str):
     window = 2
     nearby = range(max(1, current - window), min(total_pages, current + window) + 1)
     tokens = sorted(set([1, total_pages, *nearby]))
-    n_slots = len(tokens) + 4  # Prev/Next + at most two "…" gaps
 
-    # A narrow, centered block instead of buttons spread across the full width.
-    pad, center, _pad = st.columns([1, n_slots * 1.1, 1])
-    with center:
-        cols = st.columns(n_slots)
-        if cols[0].button("‹ Prev", disabled=current == 1, key=f"{page_key}_prev"):
-            st.session_state[page_key] = current - 1
-            st.rerun()
+    items = [("prev", None)]
+    prev_token = None
+    for token in tokens:
+        if prev_token is not None and token - prev_token > 1:
+            items.append(("gap", None))
+        items.append(("page", token))
+        prev_token = token
+    items.append(("next", None))
 
-        col_i = 1
-        prev_token = None
-        for token in tokens:
-            if prev_token is not None and token - prev_token > 1:
-                cols[col_i].markdown("…")
-                col_i += 1
-            is_current = token == current
-            if cols[col_i].button(str(token), key=f"{page_key}_{token}",
-                                   type="primary" if is_current else "secondary"):
-                st.session_state[page_key] = token
-                st.rerun()
-            col_i += 1
-            prev_token = token
-
-        if cols[col_i].button("Next ›", disabled=current == total_pages, key=f"{page_key}_next"):
-            st.session_state[page_key] = current + 1
-            st.rerun()
+    # The st-key-pager_* container is styled in the CSS above to pack the
+    # columns tightly together and center them.
+    with st.container(key=f"pager_{page_key}"):
+        for col, (kind, value) in zip(st.columns(len(items)), items):
+            with col:
+                if kind == "gap":
+                    st.markdown("…")
+                elif kind == "prev":
+                    if st.button("‹ Prev", disabled=current == 1, key=f"{page_key}_prev"):
+                        st.session_state[page_key] = current - 1
+                        st.rerun()
+                elif kind == "next":
+                    if st.button("Next ›", disabled=current == total_pages, key=f"{page_key}_next"):
+                        st.session_state[page_key] = current + 1
+                        st.rerun()
+                elif st.button(str(value), key=f"{page_key}_{value}",
+                               type="primary" if value == current else "secondary"):
+                    st.session_state[page_key] = value
+                    st.rerun()
 
 
 # ---------------------------------------------------------------- HOME ----
