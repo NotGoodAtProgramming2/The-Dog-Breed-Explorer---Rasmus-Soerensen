@@ -1,12 +1,12 @@
 # Decisions
 
-## Ingestion — Python script, not dlt/Airbyte
+## 1 Ingestion — Python script, not dlt/Airbyte
 - One small API call, once a day. A full framework is overkill.
 - Retries 3 times, checks the response before saving, never overwrites good data with a bad fetch.
 - Same script can run twice a day safely — no duplicates.
 - The API now needs a key (it didn't when this case was written).
 
-## Warehouse — DuckDB, not BigQuery/Snowflake/Postgres
+## 2 Warehouse — DuckDB, not BigQuery/Snowflake/Postgres
 - Only 631 rows. A cloud database adds cost and setup for no benefit.
 - DuckDB is one file (`data/warehouse.duckdb`), no server needed.
 - Tradeoff: that file is stored in git — not how I'd do it in production (see below).
@@ -30,23 +30,23 @@
      same trait, not two)
    - This is what the dashboard reads.
 
-## Transformation — dbt
+## 3 Transformation — dbt
 - Hard part: weight/life span are text (`"12-15"` or `"Male: 25-30; Female: 20-25"`).
 - Fix: pull every number out, take the smallest as min and largest as max. Works for both formats.
 - `size_class` buckets by average weight (my own thresholds).
 - 6 tests: no duplicate IDs, no empty names, valid size classes, min never exceeds max.
 - `bred_for`/`perfect_for` are empty for every breed — dropped, not modeled.
 
-## Version control & CI/CD — GitHub, one GitHub Actions workflow
+## 4 & 5 Version control & CI/CD — GitHub, one GitHub Actions workflow
 - One workflow, four triggers: pull request, push to main, daily 02:00 UTC, manual.
 - Every run fetches real, live data. Only non-PR runs commit it back.
 - API key lives in a GitHub secret and a local `.env` — never in code.
 
-## Orchestration — GitHub Actions' own scheduler, not Airflow/Dagster
+## 6 Orchestration — GitHub Actions' own scheduler, not Airflow/Dagster
 - One job, once a day. A scheduler tool would be setup for no real benefit.
 - GitHub Actions already shows pass/fail history for free.
 
-## Dashboard — Streamlit, not Power BI/Looker Studio
+## 6 Dashboard — Streamlit, not Power BI/Looker Studio
 - Same language as the rest of the project.
 - Reads the database file directly, no export step.
 - Answers 2 questions: longest life span, and size vs. life span (correlation -0.67).
