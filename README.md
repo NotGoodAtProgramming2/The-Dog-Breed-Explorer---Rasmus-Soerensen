@@ -61,11 +61,18 @@ and Silken Windhound share the top spot at 12-18 years.
 (203). The histogram peaks at 20-25 kg (117 breeds) and has a long tail: only 59 breeds are
 Giant (over 45 kg). Classes: Small under 10 kg, Medium 10-25, Large 25-45, Giant over 45.
 
+**Temperaments and size?** The most common are intelligent (537 breeds), loyal (453) and alert
+(377). No temperament belongs to a single size class, but some lean hard: *playful* is 56% Small
+(vs. 19% of all breeds), and *protective* and *calm* are 3-4x over-represented among Giant
+breeds. *Protective* is listed for only 1 of 117 Small breeds, and *energetic* and *playful*
+for no Giant breed at all. Each breed lists only a handful of traits, so "not listed" is a
+weaker claim than "never".
+
 **Size vs. life span?** A clear negative relationship: correlation **-0.67** across 589 breeds
 (slope -0.057 years/kg). A Pearson test rejects "no relationship" decisively (p ≈ 1.1×10⁻⁷⁸) —
 larger breeds age faster, matching known dog biology.
 
-Open the dashboard (`streamlit run dashboard/app.py`) to explore all three.
+Open the dashboard (`streamlit run dashboard/app.py`) to explore all four.
 
 ## Secrets
 

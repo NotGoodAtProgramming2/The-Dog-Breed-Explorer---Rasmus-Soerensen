@@ -491,3 +491,144 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+# --- Which temperaments are most common, and in which size classes? ---
+st.header("Which temperaments are most common, and which size classes have them?")
+
+SIZE_ORDER = list(SIZE_CLASS_LABELS)  # Small -> Giant
+trait_rows = con.execute(
+    """
+    select t.temperament, b.size_class, count(*) as breeds
+    from main.breed_temperaments t
+    join main.breeds b using (breed_id)
+    where b.size_class in ('Small', 'Medium', 'Large', 'Giant')
+    group by 1, 2
+    """
+).df()
+trait_rows["size_label"] = trait_rows["size_class"].map(SIZE_CLASS_LABELS)
+trait_rows["size_rank"] = trait_rows["size_class"].map({c: i for i, c in enumerate(SIZE_ORDER)})
+trait_rows["trait"] = trait_rows["temperament"].str.capitalize()
+
+trait_totals = trait_rows.groupby("trait")["breeds"].sum().sort_values(ascending=False)
+top_traits = trait_totals.head(10)
+top_data = trait_rows[trait_rows["trait"].isin(top_traits.index)]
+total_labels = top_traits.reset_index().rename(columns={"breeds": "total"})
+
+trait_bars = (
+    alt.Chart(top_data)
+    .mark_bar(stroke="#f9f6ef", strokeWidth=1.5)
+    .encode(
+        x=alt.X("trait:N", sort=list(top_traits.index), title=None, axis=alt.Axis(labelAngle=0)),
+        y=alt.Y("breeds:Q", title="Number of breeds"),
+        color=alt.Color(
+            "size_label:N",
+            title="Size class",
+            scale=alt.Scale(
+                domain=list(SIZE_LABEL_COLORS.keys()), range=list(SIZE_LABEL_COLORS.values())
+            ),
+        ),
+        order=alt.Order("size_rank:Q", sort="descending"),
+        tooltip=[
+            alt.Tooltip("trait:N", title="Temperament"),
+            alt.Tooltip("size_label:N", title="Size class"),
+            alt.Tooltip("breeds:Q", title="Breeds"),
+        ],
+    )
+)
+trait_totals_text = (
+    alt.Chart(total_labels)
+    .mark_text(dy=-8, fontSize=13, color=COLOR_TEXT)
+    .encode(x=alt.X("trait:N", sort=list(top_traits.index)), y="total:Q", text="total:Q")
+)
+st.altair_chart(
+    (trait_bars + trait_totals_text).properties(height=420)
+    .configure_axis(labelFontSize=13, titleFontSize=15)
+    .configure_legend(labelFontSize=13, titleFontSize=14),
+    use_container_width=True,
+)
+st.markdown(
+    "Each bar is one temperament; its colored parts show how many of those breeds fall in "
+    "each size class. A breed can have several temperaments, so it appears in several bars."
+    + (
+        f" {int((breeds['size_class'] == 'Unknown').sum())} breeds with no known weight can't be "
+        "placed in a size class and are left out."
+        if (breeds["size_class"] == "Unknown").any()
+        else ""
+    )
+)
+
+# Notable patterns: compare each trait's size-class mix with the mix of all breeds.
+MIN_TRAIT_BREEDS = 15  # ignore rare traits, where a few breeds would swing the percentages
+MIN_LIFT = 2.0  # "notable" = at least 2x its class's share of all breeds
+COMMON_MIN_BREEDS = 100  # only call a trait rare in a class if it is common overall
+MAX_LIFT_RARE = 0.25  # "rare in a class" = at most a quarter of that class's share
+
+by_class = trait_rows.pivot(index="trait", columns="size_class", values="breeds")
+by_class = by_class.reindex(columns=SIZE_ORDER).fillna(0)
+by_class["total"] = by_class.sum(axis=1)
+class_sizes = breeds["size_class"].value_counts().reindex(SIZE_ORDER)
+overall_share = class_sizes / class_sizes.sum()
+common = by_class[by_class["total"] >= MIN_TRAIT_BREEDS]
+trait_share = common[SIZE_ORDER].div(common["total"], axis=0)
+lift = trait_share.div(overall_share, axis=1)
+
+notable_lines, notable_traits = [], []
+for size in SIZE_ORDER:
+    for best in lift[size][lift[size] >= MIN_LIFT].sort_values(ascending=False).index:
+        notable_traits.append(best)
+        notable_lines.append(
+            f"**{best}** is over-represented in **{size}** breeds: "
+            f"{trait_share.loc[best, size]:.0%} of the {int(common.loc[best, 'total'])} breeds "
+            f"with it are {size}, against {overall_share[size]:.0%} of all breeds "
+            f"({lift.loc[best, size]:.1f}x)."
+        )
+    rare = common[(lift[size] <= MAX_LIFT_RARE) & (common["total"] >= COMMON_MIN_BREEDS)]
+    for trait in rare.index:
+        notable_traits.append(trait)
+        count = int(common.loc[trait, size])
+        notable_lines.append(
+            f"**{trait}** ({int(common.loc[trait, 'total'])} breeds) is "
+            + (
+                f"not listed for a single **{size}** breed."
+                if count == 0
+                else f"listed for only {count} of the {int(class_sizes[size])} **{size}** breeds."
+            )
+        )
+
+st.subheader("Notable temperaments")
+most_skewed = trait_share.max(axis=1).idxmax()
+st.markdown(
+    f"No temperament belongs to only one size class. The most lopsided is **{most_skewed}**, "
+    f"where {trait_share.loc[most_skewed].max():.0%} of the breeds are "
+    f"{trait_share.loc[most_skewed].idxmax()}. Still, some patterns stand out "
+    f"(traits with at least {MIN_TRAIT_BREEDS} breeds):"
+)
+for line in notable_lines:
+    st.markdown(f"- {line}")
+
+table_rows = "".join(
+    f"<tr><td>{t}</td><td>{int(common.loc[t, 'total'])}</td>"
+    + "".join(f"<td>{trait_share.loc[t, s]:.0%}</td>" for s in SIZE_ORDER)
+    + "</tr>"
+    for t in dict.fromkeys(notable_traits)
+)
+all_row = "<tr><td>All breeds</td><td>" + f"{int(class_sizes.sum())}</td>" + "".join(
+    f"<td>{overall_share[s]:.0%}</td>" for s in SIZE_ORDER
+) + "</tr>"
+st.markdown(
+    f"""
+    <div class="stats-table-wrap">
+    <table class="stats-table">
+        <thead><tr><th>Temperament</th><th>Breeds</th>
+        {"".join(f"<th>{s}</th>" for s in SIZE_ORDER)}</tr></thead>
+        <tbody>{table_rows}{all_row}</tbody>
+    </table>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+st.caption(
+    "Percentages are the share of a temperament's breeds in each size class. Each breed lists "
+    "only a handful of temperaments, so 'not listed' means the source doesn't mention it, "
+    "not that it never happens."
+)
