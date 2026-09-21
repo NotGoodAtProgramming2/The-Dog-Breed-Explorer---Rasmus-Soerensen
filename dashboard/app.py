@@ -356,8 +356,11 @@ st.markdown(
     f"**{len(weighed)} breeds** have a known weight. Most are **{most.split(' (')[0]}** "
     f"({per_class.max()} breeds, {per_class.max() / len(weighed):.0%}); only "
     f"{per_class.get(SIZE_CLASS_LABELS['Giant'], 0)} are Giant. "
-    "Each bar is 5 kg wide and uses the breed's average weight (the middle of its "
-    "reported range, so a breed listed at 20-30 kg counts as 25 kg)."
+    "Each bar is 5 kg wide. A breed's weight is the midpoint of its reported range (a breed "
+    "listed at 20-30 kg counts as 25 kg). This assumes weights within a breed are spread "
+    "roughly evenly around that middle, e.g. normally distributed, so the midpoint is a fair "
+    "stand-in for the breed's average. Male and female ranges are merged into one range per "
+    "breed, so the chart is not split by sex."
 )
 
 # --- Question 2: relationship between size and life span ---

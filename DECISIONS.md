@@ -33,6 +33,9 @@
 ## 3 Transformation — dbt
 - Hard part: weight/life span are text (`"12-15"` or `"Male: 25-30; Female: 20-25"`).
 - Fix: pull every number out, take the smallest as min and largest as max. Works for both formats.
+- The `*_avg_*` columns are the midpoint of the reported range, not a measured average. This
+  assumes weights (and life spans) within a breed are roughly symmetric, e.g. normally distributed.
+- Male and female ranges are merged into one range per breed. Nothing is split by sex.
 - `size_class` buckets by average weight (my own thresholds).
 - 6 tests: no duplicate IDs, no empty names, valid size classes, min never exceeds max.
 - `bred_for`/`perfect_for` are empty for every breed — dropped, not modeled.
