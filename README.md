@@ -18,9 +18,7 @@ dashboard/app.py (Streamlit) → charts, read straight from the warehouse
   One dated folder per day, plus a `latest.json` pointer to the newest.
 - **Curated**: dbt reads `latest.json`, parses the messy text, writes clean tables into
   `data/warehouse.duckdb`.
-- **Two apps**: `dashboard/app.py` (analytics, answers the case's questions) and
-  `dashboard/explore.py` (a consumer-facing browse/search UI with breed photos). Both query
-  the same warehouse file directly.
+- **Dashboard**: a Streamlit app (`dashboard/app.py`) queries that same file directly.
 - **Automation**: one GitHub Actions workflow runs the whole chain daily at 02:00 UTC, on
   every pull request, and on demand. Non-PR runs commit the refreshed data back.
 
@@ -39,15 +37,14 @@ cd dbt
 DBT_PROFILES_DIR=. dbt build --target prod
 cd ..
 
-streamlit run dashboard/app.py       # analytics dashboard
-streamlit run dashboard/explore.py   # browse/discover UI
+streamlit run dashboard/app.py
 ```
 
 ## The curated model
 
 - `stg_breeds`: one row per breed, renamed fields, still raw text.
-- `breeds`: the main table — `life_span`/`weight` parsed into numeric min/max/avg, a derived
-  `size_class` (Small/Medium/Large/Giant), and an `image_url` for the explore UI.
+- `breeds`: the main table — `life_span`/`weight` parsed into numeric min/max/avg, plus a
+  derived `size_class` (Small/Medium/Large/Giant).
 - `breed_temperaments`: the comma-separated `temperament` list exploded to one row per trait.
 
 6 dbt tests: structural correctness (uniqueness, not-null, valid `size_class`, referential
@@ -66,7 +63,7 @@ Giant (over 45 kg). Classes: Small under 10 kg, Medium 10-25, Large 25-45, Giant
 (slope -0.057 years/kg). A Pearson test rejects "no relationship" decisively (p ≈ 1.1×10⁻⁷⁸) —
 larger breeds age faster, matching known dog biology.
 
-Open the dashboard (`streamlit run dashboard/app.py`) to explore both.
+Open the dashboard (`streamlit run dashboard/app.py`) to explore all three.
 
 ## Secrets
 

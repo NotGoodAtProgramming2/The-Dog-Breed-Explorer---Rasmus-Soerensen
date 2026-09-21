@@ -9,6 +9,5 @@ select
     origin,
     temperament,
     life_span,
-    weight.metric as weight_metric_raw,
-    image.url as image_url
+    weight.metric as weight_metric_raw
 from read_json_auto('../data/raw/latest.json')

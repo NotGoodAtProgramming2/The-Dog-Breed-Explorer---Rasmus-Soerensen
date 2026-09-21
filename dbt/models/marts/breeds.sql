@@ -9,7 +9,6 @@ with extracted_numbers as (
         breed_group,
         origin,
         temperament,
-        image_url,
         regexp_extract_all(life_span, '[0-9]+(\.[0-9]+)?') as life_span_numbers,
         regexp_extract_all(weight_metric_raw, '[0-9]+(\.[0-9]+)?') as weight_numbers
     from {{ ref('stg_breeds') }}
@@ -22,7 +21,6 @@ typed as (
         breed_group,
         origin,
         temperament as temperament_raw,
-        image_url,
         list_min(list_transform(life_span_numbers, x -> try_cast(x as decimal(4, 1))))
             as life_span_min_years,
         list_max(list_transform(life_span_numbers, x -> try_cast(x as decimal(4, 1))))

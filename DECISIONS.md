@@ -52,10 +52,8 @@
 ## 6 Dashboard — Streamlit, not Power BI/Looker Studio
 - Same language as the rest of the project.
 - Reads the database file directly, no export step.
-- Answers 2 questions: longest life span, and size vs. life span (correlation -0.67).
-- A second app, `explore.py`, is a separate consumer-facing browse/search UI (breed photos,
-  filters) — kept apart from the analytics dashboard so neither audience gets the other's
-  clutter. Breed photos are the API's own `image.url`, hotlinked, not stored.
+- Answers 3 questions: longest life span, weight-class distribution, and size vs. life span
+  (correlation -0.67).
 
 ## What I'd do differently with more time
 - Not store the database file in git — use a small hosted database instead.
