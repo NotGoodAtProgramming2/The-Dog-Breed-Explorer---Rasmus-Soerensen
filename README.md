@@ -1,5 +1,7 @@
 # Dog Breed Explorer
 
+[![Pipeline](https://github.com/NotGoodAtProgramming2/The-Dog-Breed-Explorer---Rasmus-Soerensen/actions/workflows/pipeline.yml/badge.svg)](https://github.com/NotGoodAtProgramming2/The-Dog-Breed-Explorer---Rasmus-Soerensen/actions/workflows/pipeline.yml)
+
 A curated analytics layer over [The Dog API](https://www.thedogapi.com/), refreshed daily.
 See [DECISIONS.md](DECISIONS.md) for the reasoning behind every choice.
 
