@@ -18,7 +18,7 @@ TIMEOUT_SECONDS = 15
 
 
 def fetch_breeds() -> list:
-    """Calls the Dog API with a few retries, and returns the parsed JSON list."""
+    """Calls the Dog API with a 3 retries, and returns the parsed JSON list."""
     api_key = os.environ.get("DOG_API_KEY")
     if not api_key:
         raise RuntimeError(

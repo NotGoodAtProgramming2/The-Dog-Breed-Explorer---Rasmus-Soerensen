@@ -1,37 +1,54 @@
 # Decisions
 
-## 1 Ingestion — Python script, not dlt/Airbyte
-- One small API call, once a day. A full framework is overkill.
-- Retries 3 times, checks the response before saving, never overwrites good data with a bad fetch.
+## 1 Ingestion — Python script
+- One small automatic API call, once a day.
+- Retries 3 times, checks the response (failure in the API key or the server) before saving, never overwrites good data with a bad fetch.
 - Same script can run twice a day safely — no duplicates.
-- The API now needs a key (it didn't when this case was written).
+- When the pipeline is says "passing" in green in github, new data can be pulled everyday after 02:00.
+- The data must be a non-empty list with a minimum of one breed with ID and name. 
 
-## 2 Warehouse — DuckDB, not BigQuery/Snowflake/Postgres
-- Only 631 rows. A cloud database adds cost and setup for no benefit.
-- DuckDB is one file (`data/warehouse.duckdb`), no server needed.
-- Tradeoff: that file is stored in git — not how I'd do it in production (see below).
+Tools:
+- A python script for simplicity that uses the library "request"
+
+Tradeoffs:
+- More retries = more running time
+- Data must be opdated before 02:00, otherwise not included
+- Only checking for one breed = a dataset of only one breed can overwrite a more comprehensive dataset.
+- A more profound framework is overkill. 
+
+## 2 Warehouse — DuckDB
+- The raw data is seperated from the curated data.
+- The curated data, stg_breeds, breeds and breed_temperaments is saved in the warehouse file.
+- Dropping empty columns. 
+
+Tools:
+- Only 631 rows which is why DuckDB is preffered
+- DuckDB is one file (`data/warehouse.duckdb`).
+
+Tradeoffs: 
+- A small dataset = saving locally in file. 
+- A cloud based solution safes local space, but is expensive. This is preffered for a bigger dataset. 
+
 
 ## How data flows: raw → staging → marts
 
-1. **Raw** — `ingest/fetch_breeds.py` saves the exact API response, untouched, as JSON.
+a. **Raw** — `ingest/fetch_breeds.py` saves the exact API response, untouched, as JSON.
 
-2. **Staging** (`stg_breeds`) — light cleanup, no parsing:
+b. **Staging** (`stg_breeds`) — light cleanup:
    - Renamed: `id` → `breed_id`, `weight.metric` → `weight_metric_raw`
    - Kept as-is (still raw text): `name`, `breed_group`, `origin`, `temperament`, `life_span`
    - Dropped (empty or useless for every breed): `bred_for`, `perfect_for`, `species_id`,
      `country_code`, `country_codes`, `description`, `history`, `image`, `height`, `reference_image_id`
 
-3. **Marts** (`breeds`, `breed_temperaments`) — text becomes real data:
+c. **Marts** (`breeds`, `breed_temperaments`) — text becomes real data:
    - `life_span` → `life_span_min_years` / `max` / `avg`
    - `weight_metric_raw` → `weight_min_kg` / `max` / `avg`
    - `weight_avg_kg` → derived `size_class`
-   - `temperament` → exploded into `breed_temperaments`, one row per trait, lowercased (the
-     source capitalizes only the first trait in each breed's list, e.g. "Alert" vs "alert" —
-     same trait, not two)
+   - `temperament` → exploded into `breed_temperaments`
    - This is what the dashboard reads.
 
 ## 3 Transformation — dbt
-- Hard part: weight/life span are text (`"12-15"` or `"Male: 25-30; Female: 20-25"`).
+- weight/life span are text (`"12-15"` or `"Male: 25-30; Female: 20-25"`).
 - Fix: pull every number out, take the smallest as min and largest as max. Works for both formats.
 - The `*_avg_*` columns are the midpoint of the reported range, not a measured average. This
   assumes weights (and life spans) within a breed are roughly symmetric, e.g. normally distributed.
