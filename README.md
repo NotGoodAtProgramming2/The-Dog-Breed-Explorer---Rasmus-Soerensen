@@ -58,6 +58,10 @@ integrity) plus a min-vs-max sanity check on the parsed numbers.
 **Longest predicted life span?** Denmark Feist, Koolie, Miniature Fox Terrier, Rat Terrier,
 and Silken Windhound share the top spot at 12-18 years.
 
+**Distribution across weight classes?** Most breeds are Medium (250 of 629, 40%) or Large
+(203). The histogram peaks at 20-25 kg (117 breeds) and has a long tail: only 59 breeds are
+Giant (over 45 kg). Classes: Small under 10 kg, Medium 10-25, Large 25-45, Giant over 45.
+
 **Size vs. life span?** A clear negative relationship: correlation **-0.67** across 589 breeds
 (slope -0.057 years/kg). A Pearson test rejects "no relationship" decisively (p ≈ 1.1×10⁻⁷⁸) —
 larger breeds age faster, matching known dog biology.

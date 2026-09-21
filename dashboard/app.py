@@ -23,6 +23,17 @@ SIZE_CLASS_COLORS = {
     "Unknown": "#c7c2b4",
 }
 
+# Legend text with each class's weight range. Must match the thresholds in
+# dbt/models/marts/breeds.sql (<10, <25, <45, else Giant).
+SIZE_CLASS_LABELS = {
+    "Small": "Small (under 10 kg)",
+    "Medium": "Medium (10-25 kg)",
+    "Large": "Large (25-45 kg)",
+    "Giant": "Giant (over 45 kg)",
+}
+SIZE_LABEL_COLORS = {SIZE_CLASS_LABELS[c]: SIZE_CLASS_COLORS[c] for c in SIZE_CLASS_LABELS}
+WEIGHT_BIN_KG = 5  # divides every class threshold, so no bar spans two classes
+
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "warehouse.duckdb"
 
 st.set_page_config(page_title="Dog Breed Explorer", page_icon="🐶", layout="wide")
@@ -119,6 +130,7 @@ st.markdown(
 
 con = duckdb.connect(str(DB_PATH), read_only=True)
 breeds = con.execute("select * from main.breeds").df()
+breeds["size_label"] = breeds["size_class"].map(SIZE_CLASS_LABELS)
 
 # --- What the raw data looks like, before any parsing ---
 st.header("The raw data")
@@ -292,6 +304,62 @@ st.markdown(
     f"highlighted in orange): {', '.join(top_breeds['name'])}."
 )
 
+# --- Question 3: how are breeds distributed across weight classes? ---
+st.header("How are breeds distributed across weight classes?")
+
+# One bar per 5 kg of average weight, colored by the size class it falls in.
+weighed = breeds.dropna(subset=["weight_avg_kg"]).copy()
+weighed["bin_start"] = (weighed["weight_avg_kg"].astype(float) // WEIGHT_BIN_KG) * WEIGHT_BIN_KG
+weighed["bin_end"] = weighed["bin_start"] + WEIGHT_BIN_KG
+bins = (
+    weighed.groupby(["bin_start", "bin_end", "size_label"]).size().reset_index(name="breeds")
+)
+bins["range"] = bins.apply(lambda b: f"{b.bin_start:.0f}-{b.bin_end:.0f} kg", axis=1)
+
+bars = (
+    alt.Chart(bins)
+    .mark_bar(stroke="#f9f6ef", strokeWidth=1.5)
+    .encode(
+        x=alt.X("bin_start:Q", title="Avg. weight (kg)", scale=alt.Scale(nice=False)),
+        x2="bin_end:Q",
+        y=alt.Y("breeds:Q", title="Number of breeds"),
+        y2=alt.datum(0),
+        color=alt.Color(
+            "size_label:N",
+            title="Size class",
+            scale=alt.Scale(
+                domain=list(SIZE_LABEL_COLORS.keys()), range=list(SIZE_LABEL_COLORS.values())
+            ),
+        ),
+        tooltip=[
+            alt.Tooltip("range:N", title="Weight"),
+            alt.Tooltip("breeds:Q", title="Breeds"),
+            alt.Tooltip("size_label:N", title="Size class"),
+        ],
+    )
+)
+counts_text = (
+    alt.Chart(bins)
+    .mark_text(dy=-8, fontSize=13, color=COLOR_TEXT)
+    .encode(x=alt.X("mid:Q"), y="breeds:Q", text="breeds:Q")
+    .transform_calculate(mid="(datum.bin_start + datum.bin_end) / 2")
+)
+st.altair_chart(
+    (bars + counts_text).properties(height=420).configure_axis(labelFontSize=13, titleFontSize=15)
+    .configure_legend(labelFontSize=13, titleFontSize=14),
+    use_container_width=True,
+)
+
+per_class = weighed["size_label"].value_counts()
+most = per_class.idxmax()
+st.markdown(
+    f"**{len(weighed)} breeds** have a known weight. Most are **{most.split(' (')[0]}** "
+    f"({per_class.max()} breeds, {per_class.max() / len(weighed):.0%}); only "
+    f"{per_class.get(SIZE_CLASS_LABELS['Giant'], 0)} are Giant. "
+    "Each bar is 5 kg wide and uses the breed's average weight (the middle of its "
+    "reported range, so a breed listed at 20-30 kg counts as 25 kg)."
+)
+
 # --- Question 2: relationship between size and life span ---
 st.header("Is there a relationship between size and life span?")
 
@@ -312,11 +380,10 @@ points = (
         x=alt.X("weight_avg_kg:Q", title="Avg. weight (kg)"),
         y=alt.Y("life_span_avg_years:Q", title="Avg. expected life span (years)"),
         color=alt.Color(
-            "size_class:N",
+            "size_label:N",
             title="Size class",
             scale=alt.Scale(
-                domain=list(SIZE_CLASS_COLORS.keys()),
-                range=list(SIZE_CLASS_COLORS.values()),
+                domain=list(SIZE_LABEL_COLORS.keys()), range=list(SIZE_LABEL_COLORS.values())
             ),
         ),
         tooltip=[
