@@ -633,8 +633,11 @@ for t in deviating.index:
     )
     st.markdown(f"- **{t}** -- {parts}")
 
+standout_counts = notable_mask.sum(axis=0).reindex(SIZE_ORDER).fillna(0)
+most_standouts = standout_counts[standout_counts > 0].index.tolist()
+no_standouts = standout_counts[standout_counts == 0].index.tolist()
 st.caption(
-    "Percentages are the share of a temperament's breeds in each size class. Each breed lists "
-    "only a handful of temperaments, so 'not listed' means the source doesn't mention it, "
-    "not that it never happens."
+    f"{' and '.join(most_standouts)} breeds deviate most from the overall temperament "
+    "distribution" + (f"; {' and '.join(no_standouts)} breeds show no standout percentages."
+    if no_standouts else ".")
 )
