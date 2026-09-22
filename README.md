@@ -16,13 +16,11 @@ dbt (staging → marts)     →  data/warehouse.duckdb          (curated tables)
 dashboard/app.py (Streamlit) → charts, read straight from the warehouse
 ```
 
-- **Raw**: `ingest/fetch_breeds.py` calls the API, checks the response, writes it untouched.
-  One dated folder per day, plus a `latest.json` pointer to the newest.
-- **Curated**: dbt reads `latest.json`, parses the messy text, writes clean tables into
-  `data/warehouse.duckdb`.
-- **Dashboard**: a Streamlit app (`dashboard/app.py`) queries that same file directly.
-- **Automation**: one GitHub Actions workflow runs the whole chain daily at 02:00 UTC, on
-  every pull request, and on demand. Non-PR runs commit the refreshed data back.
+- **Raw**: `ingest/fetch_breeds.py` calls the API, validates the response, writes it untouched.
+- **Curated**: dbt parses the messy text into clean tables in `data/warehouse.duckdb`.
+- **Dashboard**: `dashboard/app.py` reads that same file directly.
+- **Automation**: one GitHub Actions workflow runs daily at 02:00 UTC, on every pull request,
+  and on demand. Non-PR runs commit the refreshed data back.
 
 ## Running it locally
 
@@ -45,39 +43,34 @@ streamlit run dashboard/app.py
 ## The curated model
 
 - `stg_breeds`: one row per breed, renamed fields, still raw text.
-- `breeds`: the main table — `life_span`/`weight` parsed into numeric min/max/avg, plus a
-  derived `size_class` (Small/Medium/Large/Giant).
+- `breeds`: `life_span`/`weight` parsed into numeric min/max/avg, plus a derived `size_class`
+  (Small/Medium/Large/Giant).
 - `breed_temperaments`: the comma-separated `temperament` list exploded to one row per trait.
 
-6 dbt tests: structural correctness (uniqueness, not-null, valid `size_class`, referential
-integrity) plus a min-vs-max sanity check on the parsed numbers.
+10 dbt tests: uniqueness, not-null, valid `size_class`, referential integrity, and a
+min-never-exceeds-max sanity check on the parsed numbers.
 
 ## What the data says
 
-**Longest predicted life span?** Denmark Feist, Koolie, Miniature Fox Terrier, Rat Terrier,
-and Silken Windhound share the top spot at 12-18 years.
+**Longest life span?** Denmark Feist, Koolie, Miniature Fox Terrier, Rat Terrier, and Silken
+Windhound share the top spot, 12-18 years.
 
-**Distribution across weight classes?** Most breeds are Medium (250 of 629, 40%) or Large
-(203). The histogram peaks at 20-25 kg (117 breeds) and has a long tail: only 59 breeds are
-Giant (over 45 kg). Classes: Small under 10 kg, Medium 10-25, Large 25-45, Giant over 45.
+**Weight classes?** Most breeds are Medium (250, 40%) or Large (203, 32%); only 59 are Giant.
+Peak: 20-25 kg (117 breeds).
 
-**Temperaments and size?** The most common are intelligent (537 breeds), loyal (453) and alert
-(377). No temperament belongs to a single size class, but some lean hard: *playful* is 56% Small
-(vs. 19% of all breeds), and *protective* and *calm* are 3-4x over-represented among Giant
-breeds. *Protective* is listed for only 1 of 117 Small breeds, and *energetic* and *playful*
-for no Giant breed at all. Each breed lists only a handful of traits, so "not listed" is a
-weaker claim than "never".
+**Temperament vs. size?** Most common traits: intelligent (538), loyal (454), alert (377).
+Small and Giant breeds deviate most from the overall temperament mix; Medium and Large don't
+(see dashboard for which traits and by how much).
 
-**Size vs. life span?** A clear negative relationship: correlation **-0.67** across 589 breeds
-(slope -0.057 years/kg). A Pearson test rejects "no relationship" decisively (p ≈ 1.1×10⁻⁷⁸) —
-larger breeds age faster, matching known dog biology.
+**Size vs. life span?** Correlation **-0.67**, slope -0.057 yrs/kg, p ≈ 1.1×10⁻⁷⁸ (589 breeds) —
+heavier breeds live shorter, matching known dog biology.
 
-Open the dashboard (`streamlit run dashboard/app.py`) to explore all four.
+Open the dashboard (`streamlit run dashboard/app.py`) for the charts behind these.
 
 ## Secrets
 
-The Dog API now requires a free key (it didn't when this brief was written). Locally: a
-gitignored `.env` file (see `.env.example`). In CI: a repository secret named `DOG_API_KEY`.
+The Dog API requires a free key. Locally: a gitignored `.env` file (see `.env.example`). In CI:
+a repository secret named `DOG_API_KEY`.
 
 ## What I'd do with more time
 
