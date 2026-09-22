@@ -89,6 +89,8 @@ st.markdown(
         font-weight: 600;
         white-space: normal;
     }
+    /* Plain tables: every row is a peer, so the last one isn't bolded like a total/conclusion. */
+    .stats-table.plain-rows tr:last-child td { font-weight: 400; }
     .data-table-wrap { margin: 0.5rem 0 1.4rem 0; overflow-x: auto; }
     .data-table { border-collapse: collapse; width: 100%; font-size: 1rem; }
     .data-table th, .data-table td {
@@ -564,9 +566,8 @@ st.markdown(
 
 # Notable patterns: compare each trait's size-class mix with the mix of all breeds.
 MIN_TRAIT_BREEDS = 15  # ignore rare traits, where a few breeds would swing the percentages
-MIN_LIFT = 2.0  # "notable" = at least 2x its class's share of all breeds
-COMMON_MIN_BREEDS = 100  # only call a trait rare in a class if it is common overall
-MAX_LIFT_RARE = 0.25  # "rare in a class" = at most a quarter of that class's share
+MIN_LIFT = 2.0  # over-represented = at least 2x its class's share of all breeds
+MAX_LIFT_RARE = 0.25  # under-represented = at most a quarter of its class's share
 
 by_class = trait_rows.pivot(index="trait", columns="size_class", values="breeds")
 by_class = by_class.reindex(columns=SIZE_ORDER).fillna(0)
@@ -577,61 +578,55 @@ common = by_class[by_class["total"] >= MIN_TRAIT_BREEDS]
 trait_share = common[SIZE_ORDER].div(common["total"], axis=0)
 lift = trait_share.div(overall_share, axis=1)
 
-notable_lines, notable_traits = [], []
-for size in SIZE_ORDER:
-    for best in lift[size][lift[size] >= MIN_LIFT].sort_values(ascending=False).index:
-        notable_traits.append(best)
-        notable_lines.append(
-            f"**{best}** is over-represented in **{size}** breeds: "
-            f"{trait_share.loc[best, size]:.0%} of the {int(common.loc[best, 'total'])} breeds "
-            f"with it are {size}, against {overall_share[size]:.0%} of all breeds "
-            f"({lift.loc[best, size]:.1f}x)."
-        )
-    rare = common[(lift[size] <= MAX_LIFT_RARE) & (common["total"] >= COMMON_MIN_BREEDS)]
-    for trait in rare.index:
-        notable_traits.append(trait)
-        count = int(common.loc[trait, size])
-        notable_lines.append(
-            f"**{trait}** ({int(common.loc[trait, 'total'])} breeds) is "
-            + (
-                f"not listed for a single **{size}** breed."
-                if count == 0
-                else f"listed for only {count} of the {int(class_sizes[size])} **{size}** breeds."
-            )
-        )
+# A trait "deviates" if some class is at least 2x over- or under-represented
+# in it, versus that class's share of all breeds -- this also catches a
+# missing class, since that pushes lift to 0 there.
+skew = lift.max(axis=1)
+deviates = lift[(skew >= MIN_LIFT) | (lift.min(axis=1) <= MAX_LIFT_RARE)].index
+deviating = trait_share.loc[deviates].loc[skew.loc[deviates].sort_values(ascending=False).index]
 
 st.subheader("Notable temperaments")
-most_skewed = trait_share.max(axis=1).idxmax()
 st.markdown(
-    f"No temperament belongs to only one size class. The most lopsided is **{most_skewed}**, "
-    f"where {trait_share.loc[most_skewed].max():.0%} of the breeds are "
-    f"{trait_share.loc[most_skewed].idxmax()}. Still, some patterns stand out "
-    f"(traits with at least {MIN_TRAIT_BREEDS} breeds):"
+    f"Temperaments (with at least {MIN_TRAIT_BREEDS} breeds) whose size-class mix differs most "
+    "from all breeds -- a class that's at least 2x over-represented, or under a quarter of its "
+    "expected share:"
 )
-for line in notable_lines:
-    st.markdown(f"- {line}")
 
-table_rows = "".join(
-    f"<tr><td>{t}</td><td>{int(common.loc[t, 'total'])}</td>"
-    + "".join(f"<td>{trait_share.loc[t, s]:.0%}</td>" for s in SIZE_ORDER)
-    + "</tr>"
-    for t in dict.fromkeys(notable_traits)
-)
-all_row = "<tr><td>All breeds</td><td>" + f"{int(class_sizes.sum())}</td>" + "".join(
-    f"<td>{overall_share[s]:.0%}</td>" for s in SIZE_ORDER
-) + "</tr>"
-st.markdown(
-    f"""
-    <div class="stats-table-wrap">
-    <table class="stats-table">
-        <thead><tr><th>Temperament</th><th>Breeds</th>
-        {"".join(f"<th>{s}</th>" for s in SIZE_ORDER)}</tr></thead>
-        <tbody>{table_rows}{all_row}</tbody>
-    </table>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+table_col, baseline_col = st.columns([3, 1])
+with table_col:
+    table_rows = "".join(
+        f"<tr><td>{t}</td><td>{int(common.loc[t, 'total'])}</td>"
+        + "".join(f"<td>{deviating.loc[t, s]:.0%}</td>" for s in SIZE_ORDER)
+        + "</tr>"
+        for t in deviating.index
+    )
+    st.markdown(
+        f"""
+        <div class="stats-table-wrap">
+        <table class="stats-table plain-rows">
+            <thead><tr><th>Temperament</th><th>Breeds</th>
+            {"".join(f"<th>{s}</th>" for s in SIZE_ORDER)}</tr></thead>
+            <tbody>{table_rows}</tbody>
+        </table>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with baseline_col:
+    baseline_rows = "".join(
+        f"<tr><td>{s}</td><td>{overall_share[s]:.0%}</td></tr>" for s in SIZE_ORDER
+    )
+    st.markdown(
+        f"""
+        <div class="stats-table-wrap">
+        <table class="stats-table plain-rows">
+            <thead><tr><th>All breeds</th><th>{int(class_sizes.sum())}</th></tr></thead>
+            <tbody>{baseline_rows}</tbody>
+        </table>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 st.caption(
     "Percentages are the share of a temperament's breeds in each size class. Each breed lists "
     "only a handful of temperaments, so 'not listed' means the source doesn't mention it, "
