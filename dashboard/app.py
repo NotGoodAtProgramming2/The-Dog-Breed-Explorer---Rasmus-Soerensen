@@ -589,44 +589,50 @@ st.subheader("Notable temperaments")
 st.markdown(
     f"Temperaments (with at least {MIN_TRAIT_BREEDS} breeds) whose size-class mix differs most "
     "from all breeds -- a class that's at least 2x over-represented, or under a quarter of its "
-    "expected share:"
+    "expected share. Bold percentages are the ones that stand out; the actual distribution "
+    "across all breeds is added at the bottom, to compare against:"
 )
 
-table_col, baseline_col = st.columns([3, 1])
-with table_col:
-    table_rows = "".join(
-        f"<tr><td>{t}</td><td>{int(common.loc[t, 'total'])}</td>"
-        + "".join(f"<td>{deviating.loc[t, s]:.0%}</td>" for s in SIZE_ORDER)
-        + "</tr>"
-        for t in deviating.index
+# Which individual cells stand out -- same rule as picking the traits, but per cell.
+notable_mask = (lift.loc[deviating.index] >= MIN_LIFT) | (lift.loc[deviating.index] <= MAX_LIFT_RARE)
+
+table_rows = "".join(
+    f"<tr><td>{t}</td><td>{int(common.loc[t, 'total'])}</td>"
+    + "".join(
+        f"<td>{'<b>' + format(deviating.loc[t, s], '.0%') + '</b>' if notable_mask.loc[t, s] else format(deviating.loc[t, s], '.0%')}</td>"
+        for s in SIZE_ORDER
     )
-    st.markdown(
-        f"""
-        <div class="stats-table-wrap">
-        <table class="stats-table plain-rows">
-            <thead><tr><th>Temperament</th><th>Breeds</th>
-            {"".join(f"<th>{s}</th>" for s in SIZE_ORDER)}</tr></thead>
-            <tbody>{table_rows}</tbody>
-        </table>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    + "</tr>"
+    for t in deviating.index
+)
+spacer_row = f'<tr><td colspan="{2 + len(SIZE_ORDER)}" style="border:none; padding:0.35rem;"></td></tr>'
+baseline_row = (
+    "<tr><td><b>All breeds</b></td><td>" + f"{int(class_sizes.sum())}</td>"
+    + "".join(f"<td>{overall_share[s]:.0%}</td>" for s in SIZE_ORDER)
+    + "</tr>"
+)
+st.markdown(
+    f"""
+    <div class="stats-table-wrap">
+    <table class="stats-table plain-rows">
+        <thead><tr><th>Temperament</th><th>Breeds</th>
+        {"".join(f"<th>{s}</th>" for s in SIZE_ORDER)}</tr></thead>
+        <tbody>{table_rows}{spacer_row}{baseline_row}</tbody>
+    </table>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown("What the bold percentages are:")
+for t in deviating.index:
+    parts = ", ".join(
+        f"{s} {deviating.loc[t, s]:.0%} (vs. {overall_share[s]:.0%} overall)"
+        for s in SIZE_ORDER
+        if notable_mask.loc[t, s]
     )
-with baseline_col:
-    baseline_rows = "".join(
-        f"<tr><td>{s}</td><td>{overall_share[s]:.0%}</td></tr>" for s in SIZE_ORDER
-    )
-    st.markdown(
-        f"""
-        <div class="stats-table-wrap">
-        <table class="stats-table plain-rows">
-            <thead><tr><th>All breeds</th><th>{int(class_sizes.sum())}</th></tr></thead>
-            <tbody>{baseline_rows}</tbody>
-        </table>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown(f"- **{t}** -- {parts}")
+
 st.caption(
     "Percentages are the share of a temperament's breeds in each size class. Each breed lists "
     "only a handful of temperaments, so 'not listed' means the source doesn't mention it, "
