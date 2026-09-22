@@ -101,5 +101,7 @@ c. **Marts** (`breeds`, `breed_temperaments`) — text becomes real data:
 - Alert on the 2 breeds with missing weight data instead of excluding.
 - Split male/female weight and height instead of merging into one range — could reveal another insight
 - Estimating the actual distribution within the breeds to get a more precise `*_avg_*`. 
+- Prepare my pipeline for a dataset with different conclusions. For instance making sure conclusions are automatically genrerated if the correlation between lifespan and weight was positive instead of negative. 
+- Investigate the individual breeds and test if conclusions about the relationsship between life span and weight stands. 
 - Try a bonus idea, e.g. AI-based temperament scoring. 
 
