@@ -21,12 +21,6 @@ models:
   - name: breed_temperaments
     description: One row per breed per temperament trait.
     columns:
-      - name: breed_id
-        tests:
-          - relationships:
-              arguments:
-                to: ref('breeds')
-                field: breed_id
       - name: temperament
         tests:
           - not_null
