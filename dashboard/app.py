@@ -359,8 +359,7 @@ class_breakdown = ", ".join(
 )
 st.markdown(
     f"**{len(weighed)} breeds** have a known weight. Most are **{most.split(' (')[0]}** "
-    f"({per_class.max()} breeds, {per_class.max() / len(weighed):.0%}); only "
-    f"{per_class.get(SIZE_CLASS_LABELS['Giant'], 0)} are Giant. "
+    f"({per_class.max()} breeds, {per_class.max() / len(weighed):.0%}). "
     f"By class: {class_breakdown}. "
     "Each bar is 5 kg wide. A breed's weight is the midpoint of its reported range (a breed "
     "listed at 20-30 kg counts as 25 kg). This assumes weights within a breed are spread "
