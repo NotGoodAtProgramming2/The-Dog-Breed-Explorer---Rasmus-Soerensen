@@ -34,6 +34,14 @@ SIZE_CLASS_LABELS = {
 SIZE_LABEL_COLORS = {SIZE_CLASS_LABELS[c]: SIZE_CLASS_COLORS[c] for c in SIZE_CLASS_LABELS}
 WEIGHT_BIN_KG = 5  # divides every class threshold, so no bar spans two classes
 
+# Charts get a fixed pixel width instead of use_container_width=True. Vega-Lite
+# renders its SVG at a fixed size up front; it doesn't reliably shrink for
+# @media print, so a chart sized to the full (wide) screen gets cut off when
+# printed to PDF. A fixed width close to an A4 page's printable width keeps
+# every chart fully visible when exported, at the cost of not filling a wide
+# browser window on screen.
+CHART_WIDTH = 650
+
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "warehouse.duckdb"
 
 st.set_page_config(page_title="Dog Breed Explorer", page_icon="🐶", layout="wide")
@@ -44,6 +52,11 @@ st.markdown(
     @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&display=swap');
 
     .block-container { padding-left: 5rem; padding-right: 5rem; max-width: 1300px; }
+    /* Narrower on print/PDF export, so wide charts fit on an A4 page instead of
+       being cut off at the right edge. */
+    @media print {
+        .block-container { max-width: 700px !important; padding-left: 0 !important; padding-right: 0 !important; }
+    }
 
     h1, h2, h3 { font-family: 'Source Serif 4', Georgia, serif !important; }
     h1 { font-size: 2.75rem !important; }
@@ -294,10 +307,10 @@ labels = (
     .encode(x="label_rank:Q", y=alt.Y("label_y:Q", scale=y_scale), text="name")
 )
 
-chart1 = (spans + points + labels).properties(height=460).configure_axis(
+chart1 = (spans + points + labels).properties(width=CHART_WIDTH, height=460).configure_axis(
     labelFontSize=13, titleFontSize=15
 )
-st.altair_chart(chart1, use_container_width=True)
+st.altair_chart(chart1, width=CHART_WIDTH)
 
 top_row = top_breeds.iloc[0]
 st.markdown(
@@ -347,9 +360,10 @@ counts_text = (
     .transform_calculate(mid="(datum.bin_start + datum.bin_end) / 2")
 )
 st.altair_chart(
-    (bars + counts_text).properties(height=420).configure_axis(labelFontSize=13, titleFontSize=15)
+    (bars + counts_text).properties(width=CHART_WIDTH, height=420)
+    .configure_axis(labelFontSize=13, titleFontSize=15)
     .configure_legend(labelFontSize=13, titleFontSize=14),
-    use_container_width=True,
+    width=CHART_WIDTH,
 )
 
 per_class = weighed["size_label"].value_counts()
@@ -453,11 +467,11 @@ slope_label = (
 
 chart2 = (
     (points + trend + connector + pin + callout_box + slope_label)
-    .properties(height=460)
+    .properties(width=CHART_WIDTH, height=460)
     .configure_axis(labelFontSize=13, titleFontSize=15)
     .configure_legend(labelFontSize=13, titleFontSize=14)
 )
-st.altair_chart(chart2, use_container_width=True)
+st.altair_chart(chart2, width=CHART_WIDTH)
 
 direction = "negative" if r < 0 else "positive"
 slope_days = abs(slope) * 365
@@ -548,10 +562,10 @@ trait_totals_text = (
     .encode(x=alt.X("trait:N", sort=list(top_traits.index)), y="total:Q", text="total:Q")
 )
 st.altair_chart(
-    (trait_bars + trait_totals_text).properties(height=420)
+    (trait_bars + trait_totals_text).properties(width=CHART_WIDTH, height=420)
     .configure_axis(labelFontSize=13, titleFontSize=15)
     .configure_legend(labelFontSize=13, titleFontSize=14),
-    use_container_width=True,
+    width=CHART_WIDTH,
 )
 st.markdown(
     "Each bar is one temperament; its colored parts show how many of those breeds fall in "
